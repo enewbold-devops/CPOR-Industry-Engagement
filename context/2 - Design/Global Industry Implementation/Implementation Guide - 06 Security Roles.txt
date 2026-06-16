@@ -1,0 +1,177 @@
+================================================================================
+CPOR DURABLE — DATAVERSE CATALOG TIER EXTENSION
+Implementation Guide 06: Security Roles
+Date: 2026-06-13
+================================================================================
+
+PURPOSE
+-------
+Configure Dataverse security role privileges for the 7 new catalog entities
+(cpor_IndustryCode, cpor_ComplianceDomain, territory extensions,
+cpor_RegulatorySource, cpor_IndustryDomainMap, cpor_TerritorySourceMap,
+cpor_RegulatoryRegistration).
+
+Two existing roles are affected:
+  1. CPOR Global Industry Team (NEW role — create)
+  2. CPOR Agent Service Principal (EXISTING role — update)
+
+The existing CPOR Sales Team Member role is NOT modified. Sales team members
+read catalog data through expanded hyperlinking on records they already
+have access to.
+
+
+================================================================================
+ROLE 1: CPOR Global Industry Team (NEW)
+================================================================================
+PURPOSE
+-------
+For compliance analysts and industry specialists who maintain the catalog data.
+They need full CRUD on all 7 catalog entities but should NOT modify engagement
+records (hypotheses, wave projects, leads, etc.).
+
+This role is assigned to:
+  - Compliance analysts who curate cpor_RegulatoryRegistration records
+  - Industry managers who map industry codes to cloud verticals
+  - Data stewards who run initial and ongoing CSV imports
+
+PRIVILEGES ON NEW CATALOG ENTITIES (all GLOBAL scope)
+------------------------------------------------------
+Entity                       Create  Read  Write  Delete  Append  AppendTo
+---------------------------  ------  ----  -----  ------  ------  --------
+cpor_IndustryCode            Global  Global Global Global Global  Global
+cpor_ComplianceDomain        Global  Global Global Global Global  Global
+territory (all fields)       None    Global Global None   None    None
+  (extensions only — cannot delete OOB territory records)
+cpor_RegulatorySource        Global  Global Global Global Global  Global
+cpor_IndustryDomainMap       Global  Global Global Global Global  Global
+cpor_TerritorySourceMap      Global  Global Global Global Global  Global
+cpor_RegulatoryRegistration  Global  Global Global Global Global  Global
+
+PRIVILEGES ON ENGAGEMENT ENTITIES (READ ONLY)
+---------------------------------------------
+Entity                       Create  Read    Write  Delete  Append  AppendTo
+---------------------------  ------  ------  -----  ------  ------  --------
+cpor_Hypothesis              None    Global  None   None    None    None
+cpor_WaveProject             None    Global  None   None    None    None
+lead                         None    Global  None   None    None    None
+opportunity                  None    Global  None   None    None    None
+account                      None    Global  None   None    None    None
+
+NOTE: Granting Global Read on Lead/Account/Opportunity is required so analysts
+can understand the business context when validating or refining regulations.
+They do NOT have Write access to these records.
+
+PORTAL STEPS
+------------
+In make.powerapps.com, open the CPOR solution.
+Select + New > Security role (or navigate via Settings > Advanced Settings >
+Security > Security Roles).
+Name the role "CPOR Global Industry Team".
+
+Using the privilege tables above, configure each table's privileges at the
+scope shown (Global). Work through each table in the Maker Portal role editor,
+setting Create/Read/Write/Delete/Append/AppendTo as specified.
+
+For the territory table, set only Read (Global) and Write (Global) —
+do NOT grant Create or Delete to prevent accidental removal of OOB records.
+
+
+================================================================================
+ROLE 2: CPOR Agent Service Principal (EXISTING — UPDATE)
+================================================================================
+PURPOSE
+-------
+The Azure Function App's service principal identity uses this role to make
+all Dataverse API calls during pipeline execution. Stage 0 (referenceResolver)
+requires Read access to all 7 new catalog entities.
+
+The existing role already has Create/Read/Write privileges on:
+  cpor_Hypothesis, cpor_WaveProject, cpor_Transcript, cpor_Artifact
+  lead, opportunity, account, systemuser, phonecall
+
+ADD these new privileges (READ GLOBAL only for catalog entities):
+
+PRIVILEGES TO ADD
+-----------------
+Entity                       Add Privileges
+---------------------------  ------------------------------------------
+cpor_IndustryCode            Read Global, Append Global, AppendTo Global
+cpor_ComplianceDomain        Read Global, Append Global, AppendTo Global
+territory                    Read Global
+cpor_RegulatorySource        Read Global
+cpor_IndustryDomainMap       Read Global, Append Global
+cpor_TerritorySourceMap      Read Global, Append Global
+cpor_RegulatoryRegistration  Read Global, Append Global
+
+AppendTo is needed because referenceResolver reads expanded navigations.
+Append is needed because Stage 0 reads child associations via $expand.
+
+NOTE: The service principal does NOT need Create/Write/Delete on catalog entities.
+Catalog data is managed by the Global Industry Team only.
+
+PORTAL STEPS
+------------
+In make.powerapps.com, open the CPOR solution.
+Locate the existing "CPOR Agent Service Principal" security role and open it
+for editing (or navigate via Settings > Advanced Settings > Security > Security
+Roles and search for the role).
+
+Using the PRIVILEGES TO ADD table above, add Read (Global) for each catalog
+table listed. For tables marked with Append/AppendTo, enable those privileges
+at Global scope as well.
+
+Save the role.
+
+IMPORTANT: Also add Write privileges on cpor_Hypothesis for the 3 new FK
+fields. The existing cpor_Hypothesis Write privilege covers all fields on
+the entity, so no additional entry is needed IF the existing role already
+has Global Write on cpor_Hypothesis. Verify this is the case before
+deployment.
+
+
+================================================================================
+ROLE 3: CPOR Sales Team Member (NO CHANGE)
+================================================================================
+Sales team members are not affected by Phase 6. They read hypothesis regulatory
+grounding data through the Hypothesis form's expanded lookup fields, which are
+visible if they have Read access to cpor_Hypothesis (already granted).
+
+They do NOT need direct Read access to cpor_RegulatoryRegistration or
+cpor_ComplianceDomain because lookup fields on forms resolve expanded values
+inline. If the form shows "EU — GDPR (2016/679)" in the Regulatory Registration
+lookup, no additional privilege is needed for the display.
+
+EXCEPTION: If the Sales Team Member role needs to open the related
+cpor_RegulatoryRegistration record from the hypothesis form (navigate to the
+full detail form), they will need Read access on cpor_RegulatoryRegistration.
+This is a discretionary decision for the org admin. It is NOT required for
+pipeline operation.
+
+
+================================================================================
+VERIFICATION
+================================================================================
+
+After deployment:
+
+1. Assign CPOR Global Industry Team role to a test user.
+   Verify they can:
+   - Create a new cpor_RegulatoryRegistration record
+   - Read cpor_Hypothesis records they do not own
+   - NOT create cpor_Hypothesis records (should be denied)
+
+2. Verify the CPOR Agent Service Principal (App User) has been updated.
+   In Settings > Security > Users > Application Users, find the pipeline
+   app registration. Confirm the role shows the new catalog Read privileges.
+
+3. Run a test pipeline invocation against a Lead with a valid UN M49 territory
+   and industry code. Check Azure Function logs for Stage 0.
+   The log should show catalog query results, NOT "No records found" or 403.
+
+4. Verify Stage 0 FetchXML directly as the service principal using Postman:
+   GET /cpor_regulatoryregistrations?$top=1
+   Should return HTTP 200 with data (not 403 Forbidden).
+
+================================================================================
+END OF GUIDE 06
+================================================================================

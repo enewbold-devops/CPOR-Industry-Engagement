@@ -1,0 +1,512 @@
+================================================================================
+CPOR DURABLE — INDUSTRY CRM IMPLEMENTATION
+Implementation Guide 02: Views
+Date: 2026-06-15
+================================================================================
+
+PURPOSE
+-------
+Define all public views for the 7 catalog entities in the CPOR Industry
+Catalog app. Views control which records analysts see by default, how records
+are sorted, and which columns are displayed.
+
+All views are created as Public Views (not Personal or System views) so they
+are available to all users of the app. Each entity section specifies:
+  - View name and type (Public View or Quick Find View)
+  - Filter conditions
+  - Columns in display order
+  - Sort order
+  - Whether the view is the entity's default view
+
+PREREQUISITE: Guide 01 (App Module) complete. GII Guides 00-07 deployed.
+
+NOTE ON cpor_STATUS FIELD: cpor_status on cpor_RegulatoryRegistration is
+currently a free-text field accepting "Active", "Superseded", or "Pending"
+(per GII Guide 04). Views below filter on these exact string values using
+"Contains" or "Equals" conditions available in the view filter editor.
+When cpor_status is converted to an optionset in a future release, these
+filters must be updated to use the optionset integer values.
+
+PORTAL STEPS (applies to all views)
+------------------------------------
+1. In make.powerapps.com, open the CPOR solution.
+2. Select Objects > Tables, then select the target table.
+3. Select Views from the table's components list.
+4. Select + New view from the command bar.
+5. Name the view, set filters, add columns, set sort order, and save.
+6. For the default view: open the desired view and select Set as default
+   from the command bar.
+
+
+================================================================================
+ENTITY: cpor_RegulatoryRegistration
+(Primary working entity — 6 views)
+================================================================================
+
+--------------------------------------------------------------------------------
+VIEW 1: Active Registrations  [DEFAULT VIEW]
+--------------------------------------------------------------------------------
+Purpose: Default working view for all analysts. Shows all current active
+         regulations across all industries and territories.
+
+Filter Conditions:
+  cpor_status   Equals   Active
+
+Columns (in order):
+  Column                              Width
+  ------------------------------------  -----
+  cpor_name                             300   (primary — legislation short name)
+  cpor_industrycodeid                   160   (expanded: cpor_name)
+  cpor_territoryid                      140   (expanded: name)
+  cpor_compliancedomainid               160   (expanded: cpor_name)
+  cpor_riskrating                       100
+  cpor_lastverifieddate                 120
+  cpor_compliancedeadline               120
+  cpor_mandatory                        80
+
+Sort: cpor_lastverifieddate Ascending (oldest verified first — surfaces
+      records due for review at the top)
+
+Default View: YES
+
+
+--------------------------------------------------------------------------------
+VIEW 2: Stale — Needs Reverification
+--------------------------------------------------------------------------------
+Purpose: Primary daily-maintenance queue. Shows active records not verified
+         within the last 180 days. These are the records most at risk of
+         grounding pipeline hypotheses in outdated law.
+
+Filter Conditions:
+  cpor_status              Equals   Active
+  cpor_lastverifieddate    Older Than X Days   180
+
+NOTE ON FILTER: The "Older Than X Days" filter in MDA is a relative date
+condition available in the Advanced Find / View filter editor. Select
+"Is older than X days" and enter 180. If this relative condition is not
+available in your org's view editor, use a static date as a temporary
+workaround and update monthly.
+
+Columns (in order):
+  Column                              Width
+  ------------------------------------  -----
+  cpor_name                             280
+  cpor_industrycodeid                   160
+  cpor_territoryid                      140
+  cpor_compliancedomainid               160
+  cpor_lastverifieddate                 120   ← EDITABLE COLUMN (see below)
+  cpor_riskrating                       100
+  cpor_nextsignificantdate              120
+
+Sort: cpor_lastverifieddate Ascending (oldest first)
+
+INLINE EDIT COLUMN — cpor_lastverifieddate:
+  After adding cpor_lastverifieddate to the view columns, open the column
+  properties and enable "Editable" (the grid must also be configured as an
+  Editable Grid — see EDITABLE GRID NOTE below).
+  This allows analysts to click the date cell directly in the view and type
+  the current date without opening the full form.
+
+EDITABLE GRID NOTE:
+  To enable inline editing on a view, the view must be rendered in an
+  Editable Grid control. In the CPOR Industry Catalog app's Registrations
+  table page, change the control for the Stale view:
+    Table page > Select table component > Controls tab > Add control >
+    Editable Grid > Set as default for Web.
+  Alternatively, configure the Editable Grid control at the table level
+  so it applies to all views. This is a table-level control setting, not
+  a per-view setting.
+
+Default View: NO
+
+
+--------------------------------------------------------------------------------
+VIEW 3: Approaching Compliance Deadlines
+--------------------------------------------------------------------------------
+Purpose: Proactive deadline management queue. Shows active records where the
+         compliance deadline is within the next 90 days.
+
+Filter Conditions:
+  cpor_status              Equals          Active
+  cpor_compliancedeadline  Next X Days     90
+
+NOTE: "Next X Days" is a relative date condition. Enter 90. Records with
+a null cpor_compliancedeadline are excluded automatically.
+
+Columns (in order):
+  Column                              Width
+  ------------------------------------  -----
+  cpor_name                             280
+  cpor_industrycodeid                   160
+  cpor_territoryid                      140
+  cpor_compliancedomainid               160
+  cpor_compliancedeadline               120   (most important — sort key)
+  cpor_riskrating                       100
+  cpor_mandatory                        80
+  cpor_lastverifieddate                 120
+
+Sort: cpor_compliancedeadline Ascending (most urgent first)
+
+Default View: NO
+
+
+--------------------------------------------------------------------------------
+VIEW 4: High Risk — Active
+--------------------------------------------------------------------------------
+Purpose: Risk management view. Shows all active High-risk registrations
+         regardless of verification date. Used for executive reporting and
+         priority triage.
+
+Filter Conditions:
+  cpor_status      Equals   Active
+  cpor_riskrating  Equals   High
+
+NOTE: cpor_riskrating is an optionset. In the filter editor, select the
+optionset field and choose "High" from the dropdown. The underlying integer
+value is 154080000 (High) per GII Guide 01.
+
+Columns (in order):
+  Column                              Width
+  ------------------------------------  -----
+  cpor_name                             280
+  cpor_industrycodeid                   160
+  cpor_compliancedomainid               160
+  cpor_territoryid                      140
+  cpor_riskrating                       100
+  cpor_mandatory                        80
+  cpor_compliancedeadline               120
+  cpor_lastverifieddate                 120
+  cpor_regulatorbodyname                180
+
+Sort: cpor_compliancedeadline Ascending (nulls last)
+
+Default View: NO
+
+
+--------------------------------------------------------------------------------
+VIEW 5: By Industry Vertical
+--------------------------------------------------------------------------------
+Purpose: Portfolio view for Industry Specialists. Groups active registrations
+         by Microsoft Industry Cloud Vertical for vertical-team assignment.
+
+Filter Conditions:
+  cpor_status   Equals   Active
+
+Columns (in order):
+  Column                                        Width
+  ----------------------------------------------  -----
+  cpor_industrycodeid (→ cpor_industrycloudvertical)  160   [grouped column]
+  cpor_industrycodeid                           160
+  cpor_name                                     260
+  cpor_territoryid                              140
+  cpor_compliancedomainid                       160
+  cpor_riskrating                               100
+  cpor_lastverifieddate                         120
+
+NOTE ON GROUPING: MDA Public Views do not natively support grouped-by
+column display in the same way as Excel pivot tables. To achieve grouping:
+  Option A: Sort by cpor_industrycodeid (proxy for vertical) — analysts
+            visually group by scrolling.
+  Option B: Add the Industry Cloud Vertical field directly if it is exposed
+            via a related column. To expand cpor_industrycloudvertical from
+            cpor_IndustryCode: add a related column from cpor_industrycodeid
+            → cpor_industrycloudvertical in the view column editor.
+  Option B is preferred. Sort by that related column Ascending.
+
+Sort: cpor_industrycodeid/cpor_industrycloudvertical Ascending,
+      then cpor_name Ascending
+
+Default View: NO
+
+
+--------------------------------------------------------------------------------
+VIEW 6: Superseded and Pending
+--------------------------------------------------------------------------------
+Purpose: Archive and staging view. Shows regulations not currently Active.
+         Analysts use this to track regulations under review (Pending) or
+         retired regulations (Superseded).
+
+Filter Conditions:
+  cpor_status   Does Not Equal   Active
+
+NOTE: MDA view filter "Does Not Equal" on a text field. If your org does not
+support this directly, use two conditions with OR logic:
+  cpor_status Equals Superseded  OR  cpor_status Equals Pending
+
+Columns (in order):
+  Column                              Width
+  ------------------------------------  -----
+  cpor_name                             280
+  cpor_status                           100
+  cpor_industrycodeid                   160
+  cpor_territoryid                      140
+  cpor_compliancedomainid               160
+  cpor_riskrating                       100
+  cpor_lastverifieddate                 120
+
+Sort: cpor_status Ascending, then cpor_name Ascending
+
+Default View: NO
+
+
+================================================================================
+ENTITY: cpor_IndustryCode
+(3 views)
+================================================================================
+
+--------------------------------------------------------------------------------
+VIEW 1: All Industry Codes  [DEFAULT VIEW]
+--------------------------------------------------------------------------------
+Filter: None (show all 33 records)
+
+Columns:
+  cpor_d365industrycode       80
+  cpor_name                   260
+  cpor_industrycloudvertical  180
+  cpor_sourceurl              200
+
+Sort: cpor_d365industrycode Ascending
+Default View: YES
+
+--------------------------------------------------------------------------------
+VIEW 2: By Industry Cloud Vertical
+--------------------------------------------------------------------------------
+Filter: None
+
+Columns:
+  cpor_industrycloudvertical  180  (sort key)
+  cpor_d365industrycode       80
+  cpor_name                   260
+
+Sort: cpor_industrycloudvertical Ascending, cpor_d365industrycode Ascending
+Default View: NO
+
+--------------------------------------------------------------------------------
+VIEW 3: Quick Find View  [SYSTEM — update existing]
+--------------------------------------------------------------------------------
+Search Fields: cpor_name, cpor_d365industrycode
+Display Columns: cpor_d365industrycode, cpor_name, cpor_industrycloudvertical
+
+
+================================================================================
+ENTITY: cpor_ComplianceDomain
+(2 views)
+================================================================================
+
+--------------------------------------------------------------------------------
+VIEW 1: All Compliance Domains  [DEFAULT VIEW]
+--------------------------------------------------------------------------------
+Filter: None (show all 20 records)
+
+Columns:
+  cpor_domaincode                  80
+  cpor_name                        260
+  cpor_commonregulatorbodytypes    280
+  cpor_typicalcoverage             280
+
+Sort: cpor_domaincode Ascending
+Default View: YES
+
+--------------------------------------------------------------------------------
+VIEW 2: Quick Find View  [SYSTEM — update existing]
+--------------------------------------------------------------------------------
+Search Fields: cpor_name, cpor_domaincode
+Display Columns: cpor_domaincode, cpor_name
+
+
+================================================================================
+ENTITY: territory (OOB — CPOR Records Only)
+(2 views)
+================================================================================
+
+NOTE: These views target the OOB territory entity. They must filter on
+cpor_territorycode IS NOT NULL to show only CPOR-managed hierarchy nodes,
+not existing D365 sales routing territory records.
+
+--------------------------------------------------------------------------------
+VIEW 1: CPOR Territories  [DEFAULT VIEW for this app]
+--------------------------------------------------------------------------------
+Filter Conditions:
+  cpor_territorycode   Contains Data   (IS NOT NULL equivalent)
+
+NOTE: In MDA view filter editor, "Contains Data" means the field is not null
+and not empty. This is the correct filter to isolate CPOR-imported records.
+
+Columns:
+  cpor_territorycode       100
+  name                     220
+  cpor_territorytype       120
+  cpor_jurisdictionlevel   140
+  cpor_isocountrycode      80
+  parentterritoryid        160   (expanded: name — shows parent in hierarchy)
+
+Sort: cpor_jurisdictionlevel Ascending, name Ascending
+Default View: YES (for the Territories table page in this app)
+
+NOTE ON DEFAULT VIEW: The OOB territory entity has its own system default view
+("All Territories") which applies across all apps. To set the CPOR Territories
+view as default for the CPOR Industry Catalog app specifically, configure the
+table page in the App Designer to use this view as the default:
+  App Designer > Taxonomy area > Territories page > Properties > Default view >
+  select "CPOR Territories".
+
+--------------------------------------------------------------------------------
+VIEW 2: CPOR Territory Hierarchy
+--------------------------------------------------------------------------------
+Purpose: Shows the UN M49 hierarchy relationship between territory nodes.
+
+Filter Conditions:
+  cpor_territorycode   Contains Data
+
+Columns:
+  parentterritoryid        160   (expanded: name)
+  cpor_jurisdictionlevel   140
+  cpor_territorycode       100
+  name                     220
+  cpor_territorytype       120
+
+Sort: parentterritoryid Ascending, cpor_jurisdictionlevel Ascending
+Default View: NO
+
+
+================================================================================
+ENTITY: cpor_RegulatorySource
+(2 views)
+================================================================================
+
+--------------------------------------------------------------------------------
+VIEW 1: All Regulatory Sources  [DEFAULT VIEW]
+--------------------------------------------------------------------------------
+Filter: None
+
+Columns:
+  cpor_sourceid      100
+  cpor_name          260
+  cpor_url           300
+  cpor_description   280
+
+Sort: cpor_sourceid Ascending
+Default View: YES
+
+--------------------------------------------------------------------------------
+VIEW 2: Quick Find View  [SYSTEM — update existing]
+--------------------------------------------------------------------------------
+Search Fields: cpor_name, cpor_sourceid
+Display Columns: cpor_sourceid, cpor_name, cpor_url
+
+
+================================================================================
+ENTITY: cpor_IndustryDomainMap
+(3 views)
+================================================================================
+
+--------------------------------------------------------------------------------
+VIEW 1: All Industry Domain Maps  [DEFAULT VIEW]
+--------------------------------------------------------------------------------
+Filter: None
+
+Columns:
+  cpor_industrycodeid                 180   (expanded: cpor_name)
+  cpor_compliancedomainid             180   (expanded: cpor_name)
+  cpor_implementationpriority         120
+  cpor_name                           220
+
+Sort: cpor_industrycodeid Ascending, cpor_implementationpriority Ascending
+Default View: YES
+
+--------------------------------------------------------------------------------
+VIEW 2: High Priority Mappings
+--------------------------------------------------------------------------------
+Filter:
+  cpor_implementationpriority   Equals   High
+
+Columns:
+  cpor_industrycodeid       180
+  cpor_compliancedomainid   180
+  cpor_name                 220
+  cpor_primarysourceids     160
+
+Sort: cpor_industrycodeid Ascending
+Default View: NO
+
+--------------------------------------------------------------------------------
+VIEW 3: By Industry Code
+--------------------------------------------------------------------------------
+Filter: None
+
+Columns:
+  cpor_industrycodeid       200  (sort key)
+  cpor_compliancedomainid   180
+  cpor_implementationpriority 120
+
+Sort: cpor_industrycodeid Ascending, cpor_implementationpriority Ascending
+Default View: NO
+
+
+================================================================================
+ENTITY: cpor_TerritorySourceMap
+(2 views)
+================================================================================
+
+--------------------------------------------------------------------------------
+VIEW 1: All Territory Source Maps  [DEFAULT VIEW]
+--------------------------------------------------------------------------------
+Filter: None
+
+Columns:
+  cpor_territoryid          160   (expanded: name)
+  cpor_compliancedomainid   180   (expanded: cpor_name)
+  cpor_regulatorysourceid   180   (expanded: cpor_name)
+  cpor_name                 220
+  cpor_usagenote            260
+
+Sort: cpor_territoryid Ascending, cpor_compliancedomainid Ascending
+Default View: YES
+
+--------------------------------------------------------------------------------
+VIEW 2: By Compliance Domain
+--------------------------------------------------------------------------------
+Filter: None
+
+Columns:
+  cpor_compliancedomainid   200  (sort key)
+  cpor_territoryid          160
+  cpor_regulatorysourceid   180
+
+Sort: cpor_compliancedomainid Ascending, cpor_territoryid Ascending
+Default View: NO
+
+
+================================================================================
+VERIFICATION
+================================================================================
+
+After creating all views, verify in the CPOR Industry Catalog app:
+
+1. Navigate to Registrations > Regulatory Registrations.
+   Confirm the view dropdown shows all 6 named views.
+   Confirm "Active Registrations" loads by default.
+   If test data is available, confirm the Stale view shows records with
+   cpor_lastverifieddate older than 180 days.
+
+2. Navigate to Taxonomy > Industry Codes.
+   Confirm "All Industry Codes" loads by default.
+   Confirm 33 rows are visible.
+
+3. Navigate to Taxonomy > Territories.
+   Confirm "CPOR Territories" loads by default.
+   Confirm records with null cpor_territorycode are NOT shown.
+   Confirm the view shows 34 CPOR hierarchy nodes.
+
+4. Navigate to Crosswalk > Industry Domain Maps.
+   Confirm "All Industry Domain Maps" loads by default.
+   Confirm the Industry Code and Compliance Domain columns show expanded names
+   (e.g. "Financial" and "Data protection & privacy") rather than GUIDs.
+
+ODATA VERIFICATION — Column expansion spot check:
+  GET /cpor_industrydomainmaps
+    ?$select=cpor_name,cpor_implementationpriority
+    &$expand=cpor_industrycodeid($select=cpor_name),
+             cpor_compliancedomainid($select=cpor_name,cpor_domaincode)
+    &$top=5
+  Expected: 5 records with both expanded names populated.

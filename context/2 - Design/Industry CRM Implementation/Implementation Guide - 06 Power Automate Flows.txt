@@ -1,0 +1,486 @@
+================================================================================
+CPOR DURABLE — INDUSTRY CRM IMPLEMENTATION
+Implementation Guide 06: Power Automate Flows
+Date: 2026-06-15
+================================================================================
+
+PURPOSE
+-------
+Define 3 Power Automate flows that automate catalog maintenance and Lead
+data synchronization. These flows handle logic that cannot be expressed in
+MDA Business Rules (date threshold comparisons, cross-entity writes,
+external notifications).
+
+  Flow 1: Stale Registration Weekly Digest
+    Notifies the Global Industry Team of registrations not verified in
+    the last 180 days. Ensures the team has a weekly prompt to review
+    stale records before the pipeline freshness gate excludes them.
+
+  Flow 2: Lead industrycode → cpor_industrycodeid Auto-sync
+    When a seller sets the OOB industrycode picklist on a Lead, automatically
+    resolves and populates the cpor_industrycodeid FK to the corresponding
+    cpor_IndustryCode catalog record. Removes the dual-entry burden from
+    sellers.
+
+  Flow 3: Lead → Account Industry Code Copy on Qualification
+    When a Lead is qualified to an Account + Opportunity, copies
+    cpor_industrycodeid from the Lead to the new Account. Ensures Accounts
+    carry the same industry catalog FK for portfolio reporting.
+
+PREREQUISITE:
+  GII Guides 00-07 deployed (entities and fields must exist).
+  Guide 00 Environment Variable CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET
+  must be created in the CPOR solution (see Guide 00, Section 6).
+  Power Automate Premium connectors may be required for the Dataverse
+  connector actions used. Confirm licensing before deployment.
+
+ALL FLOWS ARE CREATED INSIDE THE CPOR SOLUTION:
+  In make.powerapps.com, open the CPOR solution.
+  Select Objects > Cloud flows > + New cloud flow > Automated (or Scheduled).
+  Flows created inside the solution are automatically included in exports.
+
+
+================================================================================
+FLOW 1: Stale Registration Weekly Digest
+================================================================================
+
+FLOW NAME:    CPOR — Stale Registration Weekly Digest
+TRIGGER TYPE: Recurrence (Scheduled)
+PURPOSE:      Notify the Industry Team of Active registrations where
+              cpor_lastverifieddate is older than 180 days.
+
+--------------------------------------------------------------------------------
+TRIGGER: Recurrence
+--------------------------------------------------------------------------------
+  Frequency:  Week
+  Interval:   1
+  Start time: Set to upcoming Monday 09:00:00 UTC (or local tz equivalent)
+  Days:       Monday
+
+NOTE: Power Automate Recurrence triggers use UTC. Adjust the start time to
+align with 9:00 AM in the Industry Team's primary timezone. If the team is
+globally distributed, schedule for 09:00 UTC (works for EMEA morning hours).
+
+--------------------------------------------------------------------------------
+STEP 1: Get Environment Variable value
+--------------------------------------------------------------------------------
+Action: Get Environment Variable
+  Environment Variable Name:  CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET
+
+Store the value in a variable named varNotificationTarget.
+
+NOTE: If the Environment Variable connector is not available, use a
+Compose action with the hardcoded email/webhook as a temporary workaround
+and replace with the Environment Variable pattern before production deployment.
+
+ACTION STEPS:
+  Add action: Initialize variable
+    Name:  varNotificationTarget
+    Type:  String
+    Value: (empty — will be set in next step)
+
+  Add action: Get a row by ID (Dataverse connector)
+    Table Name: Environment Variable Definitions (environmentvariabledefinitions)
+    Row ID:     @{outputs('List_rows')?['body/value'][0]['environmentvariabledefinitionid']}
+
+  SIMPLER ALTERNATIVE for current release:
+  Skip the dynamic variable lookup. Use a hardcoded Compose action:
+    Compose — varNotificationTarget
+    Inputs: <enter the notification email or Teams webhook URL here>
+  Document the hardcoded value and update to the Environment Variable
+  pattern in Phase 2.
+
+--------------------------------------------------------------------------------
+STEP 2: List stale registrations
+--------------------------------------------------------------------------------
+Action: List rows (Dataverse connector)
+  Table Name:   cpor_regulatoryregistrations
+  Filter rows:  cpor_status eq 'Active' and cpor_lastverifieddate lt
+                @{addDays(utcNow(), -180)}
+  Select columns: cpor_regulatoryregistrationid,cpor_name,cpor_lastverifieddate,
+                  cpor_riskrating,_cpor_industrycodeid_value,
+                  _cpor_territoryid_value,cpor_compliancedeadline
+  Order by:     cpor_lastverifieddate asc
+  Row count:    100
+
+NOTE ON DATE EXPRESSION:
+  addDays(utcNow(), -180) returns an ISO 8601 datetime string 180 days ago.
+  The OData filter cpor_lastverifieddate lt @{...} finds records with
+  last verified date before that date.
+  Wrap the expression in quotes with the addDays call inside the dynamic
+  content picker: @{addDays(utcNow(), -180)}
+
+Store the result in variable varStaleList (or reference directly from the
+action output in subsequent steps).
+
+--------------------------------------------------------------------------------
+STEP 3: Check if any stale records exist
+--------------------------------------------------------------------------------
+Action: Condition
+  Condition:
+    length(outputs('List_rows')?['body/value'])   Greater than   0
+
+True Branch (stale records exist — proceed with notification):
+  Continue to Steps 4-6.
+
+False Branch (no stale records):
+  Add action: Terminate
+    Status: Succeeded
+  (No notification needed if catalog is fully current.)
+
+--------------------------------------------------------------------------------
+STEP 4 (True branch): Build the notification body
+--------------------------------------------------------------------------------
+Action: Compose — varStaleCount
+  Inputs: @{length(outputs('List_rows')?['body/value'])}
+
+Action: Compose — varNotificationBody
+  Inputs:
+    CPOR Catalog Health — Stale Registration Alert
+
+    @{outputs('varStaleCount')} Active registration(s) have not been
+    verified in the last 180 days. These records are at risk of being
+    excluded from pipeline grounding.
+
+    Top records by age:
+
+    @{join(
+      take(
+        map(
+          outputs('List_rows')?['body/value'],
+          item => concat(
+            item['cpor_name'],
+            ' | Last verified: ',
+            item['cpor_lastverifieddate'],
+            ' | Risk: ',
+            item['cpor_riskrating']
+          )
+        ),
+        10
+      ),
+      decodeUriComponent('%0A')
+    )}
+
+    Open the CPOR Industry Catalog app > Registrations >
+    Stale — Needs Reverification to action these records.
+
+NOTE ON FORMATTING: Power Automate's compose expression syntax uses the
+expression editor. The join/take/map pattern above may require individual
+Apply to each loops for some orgs. An alternative simpler pattern:
+
+  Use Apply to each on the List rows output.
+  Inside the loop, append to a string variable:
+    varMessageLines = varMessageLines + item['cpor_name'] + ' | ...' + '\n'
+  Cap the loop with a condition: if iteration count > 10, exit loop.
+
+Use whichever pattern your org's Power Automate version supports.
+
+--------------------------------------------------------------------------------
+STEP 5 (True branch): Send Teams notification
+--------------------------------------------------------------------------------
+Condition: Check if varNotificationTarget contains "webhook" or "teams"
+(Use a string Contains check to detect whether the target is a webhook URL
+versus an email address, and route accordingly.)
+
+If Teams webhook target:
+  Action: HTTP POST
+    Method: POST
+    URI:    @{outputs('varNotificationTarget')}
+    Headers: Content-Type: application/json
+    Body:
+      {
+        "text": "@{outputs('varNotificationBody')}"
+      }
+
+NOTE: This uses the Teams incoming webhook format (Adaptive Card or simple
+text message). For a richer Adaptive Card, replace the body with a full
+Adaptive Card JSON payload. The simple text format above is sufficient for
+the initial release.
+
+If email target (not a webhook):
+  Action: Send an email (V2) — Office 365 Outlook connector
+    To:       @{outputs('varNotificationTarget')}
+    Subject:  CPOR Catalog Alert — @{outputs('varStaleCount')} Stale Registrations
+    Body:     @{outputs('varNotificationBody')}
+    Is HTML:  No
+
+--------------------------------------------------------------------------------
+STEP 6 (True branch): Log the run (optional)
+--------------------------------------------------------------------------------
+Action: Create a new row (Dataverse connector)
+  Table: Audit Logs or use an existing notes/annotation entity.
+  NOTE: If no audit log table is available, skip this step. The flow run
+  history in Power Automate provides sufficient logging for most orgs.
+
+--------------------------------------------------------------------------------
+FLOW ACTIVATION
+--------------------------------------------------------------------------------
+Save the flow. Confirm no errors in the validation panel.
+Turn on the flow. The first run executes on the next scheduled Monday.
+To test immediately: select Test > Manually trigger from the flow designer.
+
+--------------------------------------------------------------------------------
+VERIFICATION
+--------------------------------------------------------------------------------
+1. Temporarily change a test registration's cpor_lastverifieddate to a date
+   181 days ago and set cpor_status = "Active".
+2. Run the flow manually (Test > Manually trigger).
+3. Confirm the flow completes successfully (green checkmarks on all steps).
+4. Confirm the notification is received at the target (email or Teams channel).
+5. Confirm the notification body lists the test registration by name.
+6. Reset the test record's cpor_lastverifieddate to today.
+
+
+================================================================================
+FLOW 2: Lead industrycode → cpor_industrycodeid Auto-sync
+================================================================================
+
+FLOW NAME:    CPOR — Lead Industry Code Auto-sync
+TRIGGER TYPE: Automated (Dataverse row updated)
+PURPOSE:      When a seller changes the OOB industrycode field on a Lead
+              and cpor_industrycodeid is currently null, resolve the matching
+              cpor_IndustryCode catalog record and populate the FK.
+
+RATIONALE:
+  GII Guide 05 (FK Extensions) specifies that Stage 0 reads cpor_industrycodeid
+  first and falls back to OOB industrycode if null. This flow eliminates the
+  null state by auto-populating cpor_industrycodeid whenever the OOB field
+  is set by a seller. Sellers continue using the familiar OOB picklist; the
+  catalog FK is populated transparently.
+
+--------------------------------------------------------------------------------
+TRIGGER: When a row is modified (Dataverse)
+--------------------------------------------------------------------------------
+  Table Name:     leads
+  Change type:    Modified
+  Column filter:  industrycode
+                  (trigger only when this specific column changes)
+
+NOTE: Power Automate's Dataverse trigger supports column filtering via the
+"Column filter" parameter. Enter the logical name: industrycode
+This prevents the flow from triggering on every Lead update.
+
+--------------------------------------------------------------------------------
+STEP 1: Check if sync is needed
+--------------------------------------------------------------------------------
+Action: Condition
+  Condition 1: triggerOutputs()?['body/industrycode']   Is not null
+               (seller actually set a value)
+  AND
+  Condition 2: triggerOutputs()?['body/_cpor_industrycodeid_value']   Is null
+               (FK not already set)
+
+True Branch: proceed with lookup.
+False Branch: Terminate (Succeeded). No sync needed.
+
+NOTE ON CONDITION 2 RATIONALE: If cpor_industrycodeid is already set,
+do not overwrite it. An analyst may have deliberately set a specific catalog
+record that differs from the OOB picklist value. This flow only auto-populates
+when the FK is empty.
+
+--------------------------------------------------------------------------------
+STEP 2 (True branch): Get the Lead's industrycode value
+--------------------------------------------------------------------------------
+Action: Compose — varIndustryCodeInt
+  Inputs: @{triggerOutputs()?['body/industrycode']}
+
+This captures the integer value of the OOB industrycode picklist (1-33).
+
+--------------------------------------------------------------------------------
+STEP 3 (True branch): Find matching cpor_IndustryCode record
+--------------------------------------------------------------------------------
+Action: List rows (Dataverse connector)
+  Table Name:    cpor_industrycodes
+  Filter rows:   cpor_d365industrycode eq @{outputs('varIndustryCodeInt')}
+  Select columns: cpor_industrycodeid,cpor_name
+  Row count:     1
+
+NOTE: cpor_d365industrycode is the Whole Number alternate key on
+cpor_IndustryCode. This query should return exactly 1 row if GII Guide 07
+data import is complete (33 rows, one per D365 industry code integer).
+
+--------------------------------------------------------------------------------
+STEP 4 (True branch): Check if a match was found
+--------------------------------------------------------------------------------
+Action: Condition
+  Condition: length(outputs('List_rows_IndustryCode')?['body/value'])   Equals   1
+
+True Branch: Update the Lead.
+False Branch:
+  Action: Compose — log warning
+    Inputs: No cpor_IndustryCode record found for industrycode value
+            @{outputs('varIndustryCodeInt')}. Lead cpor_industrycodeid not
+            updated. Check GII data import completeness.
+  Terminate (Succeeded) with the warning logged.
+
+--------------------------------------------------------------------------------
+STEP 5 (True branch): Update Lead with catalog FK
+--------------------------------------------------------------------------------
+Action: Update a row (Dataverse connector)
+  Table Name:       leads
+  Row ID:           @{triggerOutputs()?['body/leadid']}
+  cpor_industrycodeid@odata.bind:
+    /cpor_industrycodes(@{outputs('List_rows_IndustryCode')
+    ?['body/value'][0]['cpor_industrycodeid']})
+
+NOTE ON @odata.bind: When updating a lookup field via the Dataverse connector,
+use the @odata.bind pattern to set the FK by GUID. In the Power Automate
+"Update a row" action, the lookup field displays a dropdown. Select
+"Enter custom value" and enter the OData bind expression above.
+Alternatively, use the "Row ID" field if the connector supports direct GUID
+entry for lookup fields.
+
+--------------------------------------------------------------------------------
+FLOW ACTIVATION
+--------------------------------------------------------------------------------
+Save and turn on the flow.
+
+--------------------------------------------------------------------------------
+VERIFICATION
+--------------------------------------------------------------------------------
+1. Open a Lead in the CPOR Sales app.
+2. Ensure cpor_industrycodeid is currently empty (Industry Code (Catalog) field
+   on the Lead form shows no value).
+3. Set the OOB industrycode field to "Financial" (value 16) and save the Lead.
+4. Wait 30-60 seconds for the flow to execute.
+5. Refresh the Lead record.
+6. Confirm the Industry Code (Catalog) lookup now shows "Financial"
+   (linked to the cpor_IndustryCode record with cpor_d365industrycode = 16).
+7. Confirm the flow run in Power Automate shows as Succeeded.
+
+ALSO TEST: Set cpor_industrycodeid manually to a specific record, then
+change the OOB industrycode. Confirm the flow does NOT overwrite the
+manually set catalog FK (Condition in Step 1 prevents this).
+
+
+================================================================================
+FLOW 3: Lead → Account Industry Code Copy on Qualification
+================================================================================
+
+FLOW NAME:    CPOR — Copy Industry Code to Account on Lead Qualification
+TRIGGER TYPE: Automated (Dataverse row created — Account)
+PURPOSE:      When a Lead is qualified (creating a new Account), copy
+              cpor_industrycodeid from the source Lead to the new Account.
+
+RATIONALE:
+  GII Guide 05 notes this as a follow-on item: "Automatic copy from Lead →
+  Account during qualifyLead is NOT handled by the pipeline. A Power Automate
+  flow should be used for this." This flow completes that work item.
+
+TRIGGER PATTERN NOTE: The D365 Lead qualification process creates a new
+Account (and optionally Contact and Opportunity) via the QualifyLead message.
+The new Account has an OOB originatingleadid field that references the source
+Lead. This flow triggers on Account creation and reads the source Lead to
+copy the FK.
+
+--------------------------------------------------------------------------------
+TRIGGER: When a row is added (Dataverse)
+--------------------------------------------------------------------------------
+  Table Name:   accounts
+
+--------------------------------------------------------------------------------
+STEP 1: Check if Account came from Lead qualification
+--------------------------------------------------------------------------------
+Action: Condition
+  Condition: triggerOutputs()?['body/_originatingleadid_value']   Is not null
+
+True Branch: Proceed with copy.
+False Branch: Terminate (Succeeded). Account was not created from a Lead.
+
+NOTE: _originatingleadid_value is the lookup value for the OOB
+originatingleadid field on Account. It is populated automatically when an
+Account is created via the qualifyLead process.
+
+--------------------------------------------------------------------------------
+STEP 2 (True branch): Check if Account already has Industry Code FK
+--------------------------------------------------------------------------------
+Action: Condition
+  Condition: triggerOutputs()?['body/_cpor_industrycodeid_value']   Is null
+
+True Branch: Proceed to copy from Lead.
+False Branch: Terminate (Succeeded). Account already has a catalog FK set.
+
+--------------------------------------------------------------------------------
+STEP 3 (True branch): Get the source Lead
+--------------------------------------------------------------------------------
+Action: Get a row by ID (Dataverse connector)
+  Table Name:  leads
+  Row ID:      @{triggerOutputs()?['body/_originatingleadid_value']}
+  Select columns: leadid,cpor_industrycodeid
+
+NOTE: Request only the fields needed to minimize data transfer.
+The lookup value stored in the trigger is the GUID string of the source Lead.
+
+--------------------------------------------------------------------------------
+STEP 4 (True branch): Check if Lead has a catalog FK to copy
+--------------------------------------------------------------------------------
+Action: Condition
+  Condition: outputs('Get_Lead')?['body/_cpor_industrycodeid_value']   Is not null
+
+True Branch: Copy the FK to the Account.
+False Branch: Terminate (Succeeded). Source Lead has no catalog FK — nothing
+              to copy. Seller should set the industry code on the Lead first
+              (Flow 2 will auto-populate if OOB industrycode is set).
+
+--------------------------------------------------------------------------------
+STEP 5 (True branch): Update Account with Industry Code FK
+--------------------------------------------------------------------------------
+Action: Update a row (Dataverse connector)
+  Table Name:       accounts
+  Row ID:           @{triggerOutputs()?['body/accountid']}
+  cpor_industrycodeid@odata.bind:
+    /cpor_industrycodes(@{outputs('Get_Lead')
+    ?['body/_cpor_industrycodeid_value']})
+
+This binds the Account's cpor_industrycodeid lookup to the same
+cpor_IndustryCode record as the source Lead.
+
+--------------------------------------------------------------------------------
+FLOW ACTIVATION
+--------------------------------------------------------------------------------
+Save and turn on the flow.
+
+NOTE: This flow triggers on ALL Account creation events, not just those
+from Lead qualification. The Condition in Step 1 (originatingleadid check)
+ensures the flow exits immediately for Accounts created manually or from
+other sources. Performance impact is minimal.
+
+--------------------------------------------------------------------------------
+VERIFICATION
+--------------------------------------------------------------------------------
+1. Create a Lead in the CPOR Sales app.
+2. Set the OOB industrycode field and save. Allow Flow 2 to run (30-60 sec).
+3. Confirm cpor_industrycodeid is populated on the Lead.
+4. Qualify the Lead (Qualify from the command bar).
+   Confirm a new Account and Opportunity are created.
+5. Open the newly created Account.
+6. Wait 30-60 seconds for Flow 3 to execute.
+7. Refresh the Account record.
+8. Confirm cpor_industrycodeid on the Account matches the value on the
+   source Lead.
+9. Confirm the flow run in Power Automate shows as Succeeded.
+
+
+================================================================================
+FLOW SUMMARY
+================================================================================
+
+  Flow Name                                    Trigger              Scope
+  -------------------------------------------  -------------------  -----------------
+  CPOR — Stale Registration Weekly Digest      Scheduled (weekly)   Catalog health
+  CPOR — Lead Industry Code Auto-sync          Lead row modified    Lead enrichment
+  CPOR — Copy Industry Code to Account...      Account row added    Lead qualification
+
+All 3 flows must be in Active (On) state for normal operations.
+
+MONITORING:
+  In Power Automate > My flows, check each flow's Run history weekly.
+  Failed runs should be investigated — most failures will relate to Dataverse
+  connector authentication token expiry or transient throttling.
+  The flows use the service account identity of the user who created them.
+  If that user leaves the org, ownership must be transferred to another
+  active user or a service principal.
+
+RECOMMENDED: Assign all 3 flows to a shared service account
+(e.g. CPOR-Automation@contoso.com) owned by the CPOR admin team so that
+flow ownership persists beyond individual user tenure.

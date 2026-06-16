@@ -1,0 +1,268 @@
+================================================================================
+CPOR DURABLE — INDUSTRY CRM IMPLEMENTATION
+Implementation Guide 05: Business Rules
+Date: 2026-06-15
+================================================================================
+
+PURPOSE
+-------
+Define Business Rules on cpor_RegulatoryRegistration to enforce data quality
+at the form level. Business Rules execute client-side when a record is opened
+or when a field value changes, providing immediate feedback to analysts without
+requiring a save-and-refresh cycle.
+
+SCOPE AND LIMITATIONS
+----------------------
+MDA Business Rules support:
+  - Setting field values
+  - Showing/hiding fields
+  - Enabling/disabling (locking) fields
+  - Setting required level on fields
+  - Showing error messages on fields
+
+MDA Business Rules do NOT support:
+  - Dynamic date calculations (e.g. "today minus 180 days")
+  - Comparisons between two date fields with offsets
+  - External lookups or server-side logic
+
+Consequence: The "stale warning" UX (show a banner when cpor_lastverifieddate
+is older than 180 days) CANNOT be implemented as a Business Rule. This is
+handled by the Power Automate weekly digest flow in Guide 06, which sends
+the analyst a proactive notification. The form itself cannot show a real-time
+staleness indicator without a PCF control (flagged as a future enhancement).
+
+This guide defines 2 Business Rules that ARE fully supported natively.
+
+PREREQUISITE: GII Guides 00-07 deployed. Guide 03 (Forms) complete —
+the Business Rules reference fields on the form defined in Guide 03,
+including the new cpor_analystnotes field.
+
+
+================================================================================
+BUSINESS RULE 1: Lock Superseded Records
+================================================================================
+
+NAME:       CPOR — Lock Superseded Record Fields
+SCOPE:      Entity (runs on all forms; triggers on form load and field change)
+TABLE:      cpor_RegulatoryRegistration
+
+PURPOSE: When a record's status is "Superseded", lock all fields except
+Analyst Notes. This prevents accidental editing of historical regulation
+records while preserving the analyst's ability to add retirement context.
+
+CONDITION
+---------
+IF:
+  cpor_status  Equals  Superseded
+
+ACTION: Disable (lock) the following fields:
+  cpor_industrycodeid
+  cpor_territoryid
+  cpor_compliancedomainid
+  cpor_regulatorysourceid
+  cpor_regulatorbodyname
+  cpor_regulatortype
+  cpor_regulatorwebsiteurl
+  cpor_legaltype
+  cpor_legislationname
+  cpor_legislationurl
+  cpor_applicabilityrule
+  cpor_riskrating
+  cpor_mandatory
+  cpor_effectivedate
+  cpor_compliancedeadline
+  cpor_lastverifieddate
+  cpor_nextsignificantdate
+
+FIELD THAT REMAINS EDITABLE (NOT in the disable list):
+  cpor_analystnotes   ← analyst can still document why the record was superseded
+  cpor_status         ← must remain editable so analyst can reactivate if needed
+
+NOTE ON cpor_status: Leaving cpor_status editable for Superseded records is
+intentional. An analyst may need to reactivate a record if a regulation is
+re-enacted. If cpor_status were locked, they would be unable to do so from
+the form.
+
+PORTAL STEPS
+------------
+1. In make.powerapps.com, open the CPOR solution.
+2. Navigate to Objects > Tables > cpor_RegulatoryRegistration.
+3. Select Business Rules from the table's components list.
+4. Select + New business rule from the command bar.
+   The Business Rule designer opens.
+
+5. In the Condition panel:
+   Select the condition box and configure:
+     Entity:     cpor_RegulatoryRegistration (current record)
+     Field:      cpor_status (Status)
+     Operator:   Equals
+     Type:       Value
+     Value:      Superseded
+
+   NOTE: Because cpor_status is a free-text field, type "Superseded" exactly
+   (capital S). The condition performs a case-sensitive string comparison.
+   If the field is later converted to an optionset, this condition must be
+   updated to use the optionset integer value.
+
+6. In the Action panel (True branch):
+   For each field in the "disable" list above:
+     Select + Add > Disable field.
+     Select the field from the dropdown.
+   Repeat for all 17 fields in the disable list.
+
+   TIP: Use the field picker's search box. Search for "cpor_" to filter
+   to custom fields quickly.
+
+7. Leave the False branch empty.
+   (When status is NOT "Superseded", fields are editable by default.)
+
+8. Set the Business Rule Name:
+   CPOR — Lock Superseded Record Fields
+
+9. Set the Scope:
+   Select the scope dropdown and choose Entity.
+   Entity scope means the rule fires on all forms and also server-side
+   (on save). Form scope fires only in the browser.
+   Entity scope is preferred here to ensure Superseded records cannot be
+   modified even via API without the status change.
+
+   IMPORTANT NOTE ON ENTITY SCOPE: When scope is set to Entity, the disable
+   action becomes a server-side lock enforced during the save operation, NOT
+   a visual form lock. In practice, select "All Forms" scope if the goal is
+   a visual form-level lock only. For enforcement at save, a Plugin or
+   real-time workflow is needed instead.
+   Recommendation: Use "All Forms" scope for this release. Document the
+   server-side enforcement gap as a follow-on item.
+
+10. Select Save, then Activate.
+    Confirm the rule status shows Active.
+
+VERIFICATION
+------------
+1. Open an Active cpor_RegulatoryRegistration record.
+   Change cpor_status to "Superseded" (type in the field).
+   Confirm all fields in the disable list immediately become read-only.
+   Confirm cpor_analystnotes remains editable.
+   Confirm cpor_status itself remains editable.
+
+2. Change cpor_status back to "Active".
+   Confirm all locked fields return to editable state.
+
+3. Open a record already saved with cpor_status = "Superseded".
+   Confirm the lock is applied on form load (not just on field change).
+
+
+================================================================================
+BUSINESS RULE 2: Compliance Deadline Required When Mandatory
+================================================================================
+
+NAME:       CPOR — Require Compliance Deadline When Mandatory
+SCOPE:      All Forms
+TABLE:      cpor_RegulatoryRegistration
+
+PURPOSE: When an analyst marks a regulation as Mandatory (cpor_mandatory = Yes),
+the Compliance Deadline field (cpor_compliancedeadline) becomes required.
+A mandatory regulation with no deadline is incomplete — it cannot feed the
+pipeline's urgency scoring correctly.
+
+CONDITION
+---------
+IF:
+  cpor_mandatory  Equals  Yes (true — boolean Two Options field)
+
+ACTION: Set required level on cpor_compliancedeadline
+  Field:           cpor_compliancedeadline (Compliance Deadline)
+  Required Level:  Business Required
+
+ELSE ACTION (False branch):
+  Field:           cpor_compliancedeadline (Compliance Deadline)
+  Required Level:  None
+
+The False branch restores the field to optional when the analyst unchecks
+Mandatory. Without the False branch, the field remains required even after
+Mandatory is unchecked.
+
+PORTAL STEPS
+------------
+1. In Objects > Tables > cpor_RegulatoryRegistration > Business Rules,
+   select + New business rule.
+
+2. In the Condition panel:
+   Entity:    cpor_RegulatoryRegistration (current record)
+   Field:     cpor_mandatory (Mandatory)
+   Operator:  Equals
+   Type:      Value
+   Value:     Yes (select from the Two Options dropdown — shows as Yes/No)
+
+3. True branch Action:
+   Select + Add > Set Required Level.
+   Field:  cpor_compliancedeadline
+   Status: Business Required
+
+4. False branch Action:
+   Select the Else connector and add action:
+   Select + Add > Set Required Level.
+   Field:  cpor_compliancedeadline
+   Status: No Constraint (Not Required)
+
+5. Business Rule Name: CPOR — Require Compliance Deadline When Mandatory
+
+6. Scope: All Forms
+
+7. Select Save, then Activate.
+
+VERIFICATION
+------------
+1. Open any cpor_RegulatoryRegistration record in edit mode.
+2. Set cpor_mandatory to Yes.
+   Confirm cpor_compliancedeadline shows a red asterisk (*) or "required" indicator.
+   Attempt to save without a compliance deadline.
+   Confirm an error prevents the save: "Compliance Deadline is required."
+3. Set cpor_mandatory to No.
+   Confirm the required indicator disappears on cpor_compliancedeadline.
+   Confirm the record can be saved without a compliance deadline.
+
+
+================================================================================
+FUTURE ENHANCEMENT: Staleness Indicator (Not in this release)
+================================================================================
+
+The following Business Rule cannot be implemented with native MDA Business Rules
+due to the dynamic date comparison limitation.
+
+DESIRED BEHAVIOR (future):
+  When a record form is opened and cpor_status = "Active" and
+  cpor_lastverifieddate < today minus 90 days,
+  show a yellow warning notification on the form:
+    "This record has not been verified in the last 90 days.
+     After reviewing, update the Last Verified Date."
+
+CURRENT MITIGATION:
+  The Power Automate weekly digest flow in Guide 06 (Flow 1) sends a
+  Teams/email notification to the Industry Team listing all records stale
+  by 180 days. The staleness is surfaced proactively rather than reactively
+  on form open.
+
+RECOMMENDED FUTURE IMPLEMENTATION:
+  A Power Apps Component Framework (PCF) control bound to
+  cpor_lastverifieddate could calculate the age in days client-side and
+  render a colored status banner on the form. This requires a PCF developer
+  and is scoped as a Phase 2 enhancement.
+  Alternatively, use the Notifications feature available in Dynamics 365 2024
+  Release Wave (server-side notifications surfaced on record open via
+  real-time workflow or plugin) if available in the org.
+
+
+================================================================================
+SUMMARY OF BUSINESS RULES DEPLOYED
+================================================================================
+
+  Rule Name                                    Table                        Scope
+  -------------------------------------------  ---------------------------  ----------
+  CPOR — Lock Superseded Record Fields         cpor_RegulatoryRegistration  All Forms
+  CPOR — Require Compliance Deadline When...   cpor_RegulatoryRegistration  All Forms
+
+SOLUTION CHECK:
+In make.powerapps.com, open the CPOR solution.
+Select Objects > Business Rules.
+Confirm both rules listed above appear with Status: Active.

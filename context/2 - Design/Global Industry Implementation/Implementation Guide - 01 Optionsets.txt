@@ -1,0 +1,189 @@
+================================================================================
+CPOR DURABLE — DATAVERSE CATALOG TIER EXTENSION
+Implementation Guide 01: Optionsets
+Date: 2026-06-13
+================================================================================
+
+PURPOSE
+-------
+Add 7 new global Choices (optionsets) to the CPOR solution BEFORE creating
+any new tables. Column definitions on new tables reference these Choices by
+name. Choices must exist in the solution prior to table creation.
+
+PORTAL STEPS
+------------
+In make.powerapps.com, open the CPOR solution.
+Navigate to Objects > Choices, then select + New choice from the command bar.
+Create each Choice below as a Global choice (not local/table-scoped).
+Set the Display name and Schema name exactly as specified.
+
+IMPORTANT: The integer values assigned by the portal (154080000, etc.) depend
+on your solution publisher prefix. The values shown below are correct if the
+CPOR solution publisher prefix is 15408. If your org uses a different prefix,
+the values will differ. Record the actual deployed values.
+
+AFTER deployment, record the actual integer values and update
+src/functions/utils/optionSetMapper.js accordingly (see Guide 09).
+
+================================================================================
+OPTIONSET 1 — cpor_industrycloudvertical
+================================================================================
+Maps D365 industry codes to Microsoft Industry Cloud verticals.
+Used by: cpor_IndustryCode table
+
+Schema Name:  cpor_industrycloudvertical
+Display Name: Industry Cloud Vertical
+Description:  Microsoft Industry Cloud vertical classification
+Type:         Global Choice
+
+Options:
+  154080000  Financial Services
+  154080001  Healthcare and Life Sciences
+  154080002  Manufacturing and Mobility
+  154080003  Retail and Consumer Goods
+  154080004  Government and Sustainability
+  154080005  Media and Telecoms
+
+================================================================================
+OPTIONSET 2 — cpor_territorytype
+================================================================================
+Classifies territory nodes in the UN M49 hierarchy.
+Used by: OOB territory table (custom column cpor_territorytype)
+
+Schema Name:  cpor_territorytype
+Display Name: Territory Type
+Description:  UN M49 territory classification level
+Type:         Global Choice
+
+Options:
+  154080000  Global
+  154080001  Region
+  154080002  Subregion
+  154080003  Supranational
+  154080004  Country
+
+================================================================================
+OPTIONSET 3 — cpor_jurisdictionlevel
+================================================================================
+Identifies the legal/regulatory jurisdiction level of a territory node or
+regulation. Used to sort candidateRegulations in Stage 0 from most-specific
+(Sectoral) to least-specific (Global).
+Used by: OOB territory table + cpor_RegulatoryRegistration
+
+Schema Name:  cpor_jurisdictionlevel
+Display Name: Jurisdiction Level
+Description:  Legal hierarchy level for regulatory jurisdiction
+Type:         Global Choice
+
+Options:
+  154080000  Global
+  154080001  Supranational
+  154080002  National
+  154080003  Subnational
+  154080004  Sectoral
+
+================================================================================
+OPTIONSET 4 — cpor_implementationpriority
+================================================================================
+Priority ranking for compliance domains per industry.
+Used by: cpor_IndustryDomainMap
+
+Schema Name:  cpor_implementationpriority
+Display Name: Implementation Priority
+Description:  Priority for compliance domain implementation per industry
+Type:         Global Choice
+
+Options:
+  154080000  High
+  154080001  Medium
+  154080002  Low
+
+================================================================================
+OPTIONSET 5 — cpor_riskrating
+================================================================================
+Risk severity for regulatory registrations. Feeds the regulatoryExposure
+wave project score dimension.
+Used by: cpor_RegulatoryRegistration
+
+Schema Name:  cpor_riskrating
+Display Name: Risk Rating
+Description:  Regulatory risk severity rating
+Type:         Global Choice
+
+Options:
+  154080000  High
+  154080001  Medium
+  154080002  Low
+
+================================================================================
+OPTIONSET 6 — cpor_legaltype
+================================================================================
+Type of legal instrument for a regulatory registration.
+Used by: cpor_RegulatoryRegistration
+
+Schema Name:  cpor_legaltype
+Display Name: Legal Type
+Description:  Type of legal instrument governing this regulation
+Type:         Global Choice
+
+Options:
+  154080000  Act
+  154080001  Regulation
+  154080002  Directive
+  154080003  Standard
+  154080004  Guidance
+  154080005  Framework
+
+================================================================================
+OPTIONSET 7 — cpor_regulatortype
+================================================================================
+Type of regulatory or standards authority issuing or overseeing a regulation.
+Used by: cpor_RegulatoryRegistration
+
+Schema Name:  cpor_regulatortype
+Display Name: Regulator Type
+Description:  Classification of the regulatory or standards authority
+Type:         Global Choice
+
+Options:
+  154080000  Supranational Agency
+  154080001  National Authority
+  154080002  Regional Authority
+  154080003  Standards Body
+  154080004  Industry Body / SRO
+  154080005  Legislative Body
+  154080006  Other
+
+Guidance:
+  Supranational Agency — EDPB, EBA, ESMA, BIS, FATF
+  National Authority   — ICO, FCA, BaFin, SEC, FTC, APRA
+  Regional Authority   — EU Commission, state-level bodies
+  Standards Body       — ISO, NIST, IEEE, CIS
+  Industry Body / SRO  — PCI SSC, FINRA, SWIFT, IIROC
+  Legislative Body     — Parliament, Congress (direct legislation instruments)
+  Other                — Catch-all for edge cases
+
+================================================================================
+POST-DEPLOYMENT STEPS
+================================================================================
+
+1.  In make.powerapps.com, open the CPOR solution and navigate to
+    Objects > Choices. Confirm all 7 new Choices appear with the correct
+    display names and options.
+
+2.  IMPORTANT: Verify the integer values that were actually deployed by
+    clicking each Choice and checking the option values shown. The values
+    in this guide (154080000 etc.) are correct if the CPOR solution
+    publisher prefix is 15408. If your org uses a different prefix, the
+    values will differ. Record the actual values.
+
+3.  Update src/functions/utils/optionSetMapper.js with the confirmed values
+    per the additions specified in Guide 09.
+
+    cpor_regulatortype must be added to optionSetMapper.js alongside
+    cpor_legaltype and cpor_riskrating (all three are used by
+    cpor_RegulatoryRegistration).
+
+================================================================================
+END OF GUIDE 01
+================================================================================

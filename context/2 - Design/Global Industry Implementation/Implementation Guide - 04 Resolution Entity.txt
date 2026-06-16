@@ -1,0 +1,336 @@
+================================================================================
+CPOR DURABLE — DATAVERSE CATALOG TIER EXTENSION
+Implementation Guide 04: Resolution Entity (cpor_RegulatoryRegistration)
+Date: 2026-06-13
+================================================================================
+
+PURPOSE
+-------
+Create cpor_RegulatoryRegistration — the core "grounding record" for the
+catalog tier. Each record represents one specific regulation (or regulatory
+obligation) applicable to a given industry in a given territory/jurisdiction
+under a given compliance domain.
+
+Stage 0 queries this entity to build the candidateRegulations[] array that
+grounds Stage 4 regulatory verification and populates FK fields on hypotheses.
+
+PREREQUISITES
+-------------
+Phase 1 (optionsets), Phase 2 (taxonomy entities), and Phase 3 (crosswalk
+entities) must be deployed first. This entity has FKs to all 3 taxonomy
+entities plus the OOB territory entity.
+
+
+================================================================================
+ENTITY — cpor_RegulatoryRegistration
+================================================================================
+Display Name:       Regulatory Registration
+Plural Name:        Regulatory Registrations
+Entity Set Name:    cpor_regulatoryregistrations
+Schema Name:        cpor_RegulatoryRegistration
+Primary Field:      cpor_name
+Description:        A curated record of a specific regulatory obligation,
+                    legislation, or compliance requirement applicable to a
+                    particular industry code in a particular territory/
+                    jurisdiction under a particular compliance domain.
+                    These records ground AI-generated regulatory claims and
+                    provide authoritative FK references for hypotheses.
+
+OWNERSHIP:          User or Team
+AUDIT:              Enabled
+CHANGE TRACKING:    Enabled (required for Stage 0 date-filtered query)
+
+================================================================================
+FIELDS — TAXONOMY ANCHORS (required FKs)
+================================================================================
+
+Field Name               Display Name          Type      Required  Notes
+-----------------------  --------------------  --------  --------  --------------------------------
+cpor_industrycodeid      Industry Code         Lookup    Required  → cpor_IndustryCode
+                                                                   Relationship: N:1
+                                                                   Cascade Delete: RemoveLink
+cpor_territoryid         Territory             Lookup    Required  → OOB territory entity
+                                                                   Relationship: N:1
+                                                                   Cascade Delete: RemoveLink
+cpor_compliancedomainid  Compliance Domain     Lookup    Required  → cpor_ComplianceDomain
+                                                                   Relationship: N:1
+                                                                   Cascade Delete: RemoveLink
+cpor_regulatorysourceid  Regulatory Source     Lookup    None      → cpor_RegulatorySource
+                                                                   Optional. Present when a
+                                                                   specific source was used
+                                                                   to validate this record.
+                                                                   Cascade Delete: RemoveLink
+
+================================================================================
+FIELDS — REGULATOR IDENTITY
+================================================================================
+
+Field Name               Display Name          Type           Required  Notes
+-----------------------  --------------------  -------------  --------  ---------------------------
+cpor_regulatorbodyname   Regulator / Body Name Text (200)     None      Full name of the regulatory
+                                                                         authority e.g. "European
+                                                                         Data Protection Board"
+cpor_regulatortype       Regulator Type        Choice         None      Options: cpor_regulatortype
+                                                                         Supranational Agency /
+                                                                         National Authority /
+                                                                         Regional Authority /
+                                                                         Standards Body /
+                                                                         Industry Body (SRO) /
+                                                                         Legislative Body / Other
+                                                                         See Guide 01 Optionset 7.
+cpor_regulatorwebsiteurl Regulator Website URL URL            None      Primary URL for the
+                                                                         regulatory body
+
+================================================================================
+FIELDS — LEGISLATION DETAILS
+================================================================================
+
+Field Name               Display Name          Type           Required  Notes
+-----------------------  --------------------  -------------  --------  ---------------------------
+cpor_name                Name                  Text (200)     Required  Primary field. Convention:
+                                                                         "[Country/Region] — [Short
+                                                                         Act Name]" e.g.
+                                                                         "EU — GDPR (2016/679)"
+cpor_legaltype           Legal Type            Choice         None      Options: cpor_legaltype
+                                                                         Act/Regulation/Directive/
+                                                                         Standard/Guidance/Framework
+cpor_legislationname     Legislation Name      Text (300)     None      Full official name
+                                                                         e.g. "General Data
+                                                                         Protection Regulation"
+cpor_legislationurl      Legislation URL       URL            None      Official text or summary URL
+cpor_applicabilityrule   Applicability Rule    Text Area(1000) None     Plain-language rule for when
+                                                                         this record applies.
+                                                                         e.g. "Applies when org
+                                                                         processes personal data of
+                                                                         EU residents, regardless of
+                                                                         org location."
+
+================================================================================
+FIELDS — RISK AND STATUS
+================================================================================
+
+Field Name               Display Name          Type           Required  Notes
+-----------------------  --------------------  -------------  --------  ---------------------------
+cpor_mandatory           Mandatory             Two Options    None      Yes = legally mandatory;
+                                                                         No = voluntary / best
+                                                                         practice
+cpor_riskrating          Risk Rating           Choice         None      Options: cpor_riskrating
+                                                                         High/Medium/Low
+                                                                         Feeds regulatoryExposure
+                                                                         score in Stage 7.
+cpor_status              Status                Text (20)      None      Values: Active, Superseded,
+                                                                         Pending. Free text.
+                                                                         Stage 0 filters: Active only.
+                                                                         Future: convert to optionset.
+
+================================================================================
+FIELDS — DATES
+================================================================================
+
+Field Name               Display Name          Type           Required  Notes
+-----------------------  --------------------  -------------  --------  ---------------------------
+cpor_effectivedate       Effective Date        Date Only      None      Date regulation came/comes
+                                                                         into force
+cpor_compliancedeadline  Compliance Deadline   Date Only      None      Deadline for compliance.
+                                                                         Null = no deadline /
+                                                                         already in force.
+cpor_lastverifieddate    Last Verified Date    Date Only      None      Date a human verified this
+                                                                         record is current.
+                                                                         Stage 0 filters:
+                                                                         >= today minus
+                                                                         CATALOG_FRESHNESS_DAYS
+                                                                         (default: 180 days).
+cpor_nextsignificantdate Next Significant Date Date Only      None      Next expected revision,
+                                                                         consultation deadline, or
+                                                                         enforcement change date.
+
+================================================================================
+FIELDS — GOVERNANCE
+================================================================================
+
+Field Name               Display Name          Type           Required  Notes
+-----------------------  --------------------  -------------  --------  ---------------------------
+cpor_owner               Record Owner (Text)   Text (200)     None      Name of person responsible
+                                                                         for maintaining this record.
+                                                                         Separate from Dataverse
+                                                                         OwnerId system field.
+cpor_notes               Notes                 Text Area(2000) None     Free-form analyst notes,
+                                                                         exceptions, caveats.
+
+================================================================================
+DUPLICATE DETECTION RULE
+================================================================================
+Rule Name: "Duplicate Regulatory Registration"
+Fields:    cpor_industrycodeid AND cpor_territoryid AND cpor_legislationname
+Match:     Exact on all 3 fields (case-insensitive on cpor_legislationname)
+Action:    Warn on create and import
+
+This prevents the same law from being entered twice for the same
+industry × territory combination.
+
+================================================================================
+STAGE 0 QUERY PATTERN
+================================================================================
+referenceResolver.js builds candidateRegulations[] using:
+
+  const freshnessDate = new Date();
+  freshnessDate.setDate(freshnessDate.getDate() - CATALOG_FRESHNESS_DAYS);
+  const freshnessCutoff = freshnessDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+  // Build territory filter across the jurisdiction chain
+  const territoryFilter = jurisdictionChain
+    .map(t => `_cpor_territoryid_value eq ${t.territoryid}`)
+    .join(' or ');
+
+  GET /cpor_regulatoryregistrations
+    ?$filter=
+      _cpor_industrycodeid_value eq '{industryCodeGuid}'
+      and ({territoryFilter})
+      and cpor_status eq 'Active'
+      and cpor_lastverifieddate ge {freshnessCutoff}
+    &$expand=
+      cpor_compliancedomainid($select=cpor_domaincode,cpor_name),
+      cpor_territoryid($select=cpor_territorycode,cpor_jurisdictionlevel)
+    &$select=
+      cpor_regulatoryregistrationid,
+      cpor_name,
+      cpor_legislationname,
+      cpor_applicabilityrule,
+      cpor_mandatory,
+      cpor_riskrating,
+      cpor_legislationurl,
+      cpor_effectivedate,
+      cpor_compliancedeadline
+    &$orderby=cpor_territoryid/cpor_jurisdictionlevel desc
+
+Returns records sorted most-specific first (Country before Region before Global).
+LLM receives these as the `candidateRegulations` array in the grounding context.
+
+Environment variable:
+  CATALOG_FRESHNESS_DAYS=180  (set in local.settings.json and Azure Function App settings)
+  If a record's cpor_lastverifieddate is older than this, it is excluded.
+  If this variable is not set, default to 180.
+
+================================================================================
+@odata.bind PATTERN FOR HYPOTHESIS FK
+================================================================================
+When dataverseWriter.js creates a cpor_Hypothesis record and the LLM has
+emitted a regulatoryRegistrationId in the hypothesis JSON, the bind is:
+
+  "cpor_regulatoryregistration@odata.bind":
+    "/cpor_regulatoryregistrations(${hypothesis.regulatoryRegistrationId})"
+
+The regulatoryRegistrationId is a GUID returned by Stage 0 in the
+candidateRegulations[] array. Stage 4/5/6 pass it through the hypothesis
+object if applicable.
+
+Full FK bind block in dataverseWriter.js createHypotheses (see Guide 09):
+
+  ...(h.regulatoryRegistrationId
+    ? { "cpor_regulatoryregistration@odata.bind":
+          `/cpor_regulatoryregistrations(${h.regulatoryRegistrationId})` }
+    : {}),
+  ...(h.complianceDomainCode
+    ? { "cpor_compliancedomain@odata.bind":
+          `/cpor_compliancedomains(cpor_domaincode='${h.complianceDomainCode}')` }
+    : {}),
+  ...(h.territoryCode
+    ? { "cpor_territory@odata.bind":
+          `/territories(cpor_territorycode='${h.territoryCode}')` }
+    : {}),
+
+================================================================================
+SEED DATA — 4 INITIAL RECORDS (from Industry Import Template.csv)
+================================================================================
+These 4 records should be created in Phase 7 to verify the catalog end-to-end
+before the full data import.
+
+Record 1:
+  cpor_name:            "EU — GDPR (2016/679)"
+  IndustryCode:         Financial (code 16)
+  Territory:            EMEA-EU
+  ComplianceDomain:     PRIV
+  cpor_legaltype:       Directive (154080002)
+  cpor_legislationname: General Data Protection Regulation
+  cpor_mandatory:       Yes
+  cpor_riskrating:      High (154080000)
+  cpor_status:          Active
+  cpor_lastverifieddate: (today's date)
+
+Record 2:
+  cpor_name:            "Global — ISO 27001:2022"
+  IndustryCode:         Financial (code 16)
+  Territory:            GLOBAL
+  ComplianceDomain:     CYBER
+  cpor_legaltype:       Standard (154080003)
+  cpor_legislationname: ISO/IEC 27001:2022 Information Security Management
+  cpor_mandatory:       No
+  cpor_riskrating:      Medium (154080001)
+  cpor_status:          Active
+  cpor_lastverifieddate: (today's date)
+
+Record 3:
+  cpor_name:            "EU — DORA (2022/2554)"
+  IndustryCode:         Financial (code 16)
+  Territory:            EMEA-EU
+  ComplianceDomain:     CYBER
+  cpor_legaltype:       Regulation (154080001)
+  cpor_legislationname: Digital Operational Resilience Act
+  cpor_mandatory:       Yes
+  cpor_riskrating:      High (154080000)
+  cpor_status:          Active
+  cpor_compliancedeadline: 2025-01-17
+  cpor_lastverifieddate: (today's date)
+
+Record 4:
+  cpor_name:            "US — HIPAA Security Rule"
+  IndustryCode:         Doctor's Offices and Clinics (code 11)
+  Territory:            NAM-US
+  ComplianceDomain:     HEALTH
+  cpor_legaltype:       Act (154080000)
+  cpor_legislationname: Health Insurance Portability and Accountability Act - Security Rule
+  cpor_mandatory:       Yes
+  cpor_riskrating:      High (154080000)
+  cpor_status:          Active
+  cpor_lastverifieddate: (today's date)
+
+================================================================================
+VERIFICATION
+================================================================================
+
+FetchXML to verify seed records resolve correctly:
+
+<fetch>
+  <entity name="cpor_regulatoryregistration">
+    <attribute name="cpor_name" />
+    <attribute name="cpor_status" />
+    <attribute name="cpor_riskrating" />
+    <link-entity name="cpor_industrycode" from="cpor_industrycodeid"
+                 to="cpor_industrycodeid" alias="ic">
+      <attribute name="cpor_name" alias="industryname" />
+    </link-entity>
+    <link-entity name="territory" from="territoryid"
+                 to="cpor_territoryid" alias="t">
+      <attribute name="cpor_territorycode" alias="terr" />
+    </link-entity>
+    <link-entity name="cpor_compliancedomain" from="cpor_compliancedomainid"
+                 to="cpor_compliancedomainid" alias="dom">
+      <attribute name="cpor_domaincode" alias="domain" />
+    </link-entity>
+    <filter>
+      <condition attribute="cpor_status" operator="eq" value="Active" />
+    </filter>
+  </entity>
+</fetch>
+
+Expected: 4 rows with industry, territory code, and domain code visible.
+
+Verify Stage 0 CATALOG_FRESHNESS_DAYS filter works:
+  - Set one record's cpor_lastverifieddate to 200 days ago
+  - Run Stage 0 with CATALOG_FRESHNESS_DAYS=180
+  - That record should NOT appear in candidateRegulations[]
+  - Reset the date after testing
+
+================================================================================
+END OF GUIDE 04
+================================================================================

@@ -1,0 +1,34 @@
+IndustryCode,IndustryName,DynamicsField,SourceURL
+1,Accounting,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+2,Agriculture and Non-petrol Natural Resource Extraction,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+3,Broadcasting Printing and Publishing,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+4,Brokers,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+5,Building Supply Retail,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+6,Business Services,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+7,Consulting,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+8,Consumer Services,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+9,"Design, Direction and Creative Management",account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+10,"Distributors, Dispatchers and Processors",account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+11,Doctor's Offices and Clinics,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+12,Durable Manufacturing,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+13,Eating and Drinking Places,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+14,Entertainment Retail,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+15,Equipment Rental and Leasing,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+16,Financial,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+17,Food and Tobacco Processing,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+18,Inbound Capital Intensive Processing,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+19,Inbound Repair and Services,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+20,Insurance,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+21,Legal Services,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+22,Non-Durable Merchandise Retail,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+23,Outbound Consumer Service,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+24,Petrochemical Extraction and Distribution,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+25,Service Retail,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+26,SIG Affiliations,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+27,Social Services,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+28,Special Outbound Trade Contractors,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+29,Specialty Realty,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+30,Transportation,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+31,Utility Creation and Distribution,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+32,Vehicle Retail,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account
+33,Wholesale,account.industrycode,https://learn.microsoft.com/en-us/dynamics365/developer/reference/entities/account

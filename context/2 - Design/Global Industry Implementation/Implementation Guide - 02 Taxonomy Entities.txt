@@ -1,0 +1,306 @@
+================================================================================
+CPOR DURABLE — DATAVERSE CATALOG TIER EXTENSION
+Implementation Guide 02: Taxonomy Entities
+Date: 2026-06-13
+================================================================================
+
+PURPOSE
+-------
+Create 3 new custom entities and extend the OOB territory entity with 5 custom
+fields. All taxonomy entities are managed by the Global Industry Team and serve
+as the controlled vocabulary for the crosswalk and resolution tiers.
+
+PREREQUISITE: Phase 1 (all 6 optionsets) must be deployed before creating
+entity attributes that reference those optionsets.
+
+RECOMMENDED APPROACH: Create all tables and columns directly in the Power Apps
+Maker Portal (make.powerapps.com > Solutions > CPOR > Objects > Tables).
+This guide specifies the precise field definitions.
+
+All new custom entities follow the same configuration pattern as the existing
+cpor_Hypothesis and cpor_WaveProject entities:
+  - Ownership: User or Team
+  - Audit: Enabled
+  - Change Tracking: Enabled
+  - Quick Create Form: Disabled (catalog data, not transactional)
+
+
+================================================================================
+ENTITY 2a — cpor_IndustryCode
+================================================================================
+Display Name:       Industry Code
+Plural Name:        Industry Codes
+Entity Set Name:    cpor_industrycodes
+Schema Name:        cpor_IndustryCode
+Primary Field:      cpor_name
+Description:        Canonical D365 industrycode values extended with Microsoft
+                    Industry Cloud vertical classification. Master reference
+                    for all industry-scoped catalog queries.
+Alternate Key:      cpor_d365industrycode (unique whole number)
+
+FIELDS
+------
+Field Name                  Display Name              Type            Required  Notes
+--------------------------  ------------------------  --------------  --------  ----------------------------
+cpor_name                   Name                      Text (100)      Required  Primary field. D365 industry
+                                                                                name from account.industrycode
+                                                                                e.g. "Financial"
+cpor_d365industrycode       D365 Industry Code        Whole Number    Required  Integer value from account.
+                                                                                industrycode (1-33). Set as
+                                                                                alternate key. Must be unique.
+cpor_industrycloudvertical  Industry Cloud Vertical   Choice          None      Options: cpor_industrycloudvertical
+                                                                                Maps to one of 6 Microsoft
+                                                                                Industry Cloud verticals.
+cpor_sourceurl              Source URL                URL             None      D365 developer reference URL
+                                                                                from Industry Codes.csv
+
+ALTERNATE KEY DEFINITION
+------------------------
+Key Name: Industry Code
+Fields:   cpor_d365industrycode
+Purpose:  Allows @odata.bind using code integer rather than GUID.
+          e.g. cpor_industrycodes(cpor_d365industrycode=16)
+
+INDUSTRY CODE TO INDUSTRY CLOUD VERTICAL MAPPING
+-------------------------------------------------
+Use this mapping when importing data in Phase 7:
+
+D365 Code  Industry Name                              Industry Cloud Vertical
+---------  -----------------------------------------  -----------------------------------
+1          Accounting                                 Financial Services
+2          Agriculture and Non-petrol Nat. Resource   Manufacturing and Mobility
+3          Broadcasting Printing and Publishing       Media and Telecoms
+4          Brokers                                    Financial Services
+5          Building Supply Retail                     Retail and Consumer Goods
+6          Business Services                          (General — no specific vertical)
+7          Consulting                                 (General — no specific vertical)
+8          Consumer Services                          Retail and Consumer Goods
+9          Design Direction and Creative Management   Media and Telecoms
+10         Distributors Dispatchers and Processors    Manufacturing and Mobility
+11         Doctor's Offices and Clinics               Healthcare and Life Sciences
+12         Durable Manufacturing                      Manufacturing and Mobility
+13         Eating and Drinking Places                 Retail and Consumer Goods
+14         Entertainment Retail                       Retail and Consumer Goods
+15         Equipment Rental and Leasing               (General)
+16         Financial                                  Financial Services
+17         Food and Tobacco Processing                Manufacturing and Mobility
+18         Inbound Capital Intensive Processing       Manufacturing and Mobility
+19         Inbound Repair and Services                Manufacturing and Mobility
+20         Insurance                                  Financial Services
+21         Legal Services                             (General)
+22         Non-Durable Merchandise Retail             Retail and Consumer Goods
+23         Outbound Consumer Service                  Retail and Consumer Goods
+24         Petrochemical Extraction and Distribution  Manufacturing and Mobility
+25         Service Retail                             Retail and Consumer Goods
+26         SIG Affiliations                           Government and Sustainability
+27         Social Services                            Government and Sustainability
+28         Special Outbound Trade Contractors         Manufacturing and Mobility
+29         Specialty Realty                           (General)
+30         Transportation                             Manufacturing and Mobility
+31         Utility Creation and Distribution         Manufacturing and Mobility
+32         Vehicle Retail                             Retail and Consumer Goods
+33         Wholesale                                  Retail and Consumer Goods
+
+Note: "General" industries have no single Industry Cloud vertical. Leave
+cpor_industrycloudvertical blank for these rows. Stage 3 will still
+classify them; they just won't have a vertical-specific challenge catalog.
+
+VERIFICATION
+------------
+After Phase 7 data import:
+GET /cpor_industrycodes?$select=cpor_name,cpor_d365industrycode,cpor_industrycloudvertical
+Should return 33 records. Filter cpor_d365industrycode eq 16 should return
+the "Financial" record with industrycloudvertical = Financial Services.
+
+
+================================================================================
+ENTITY 2b — cpor_ComplianceDomain
+================================================================================
+Display Name:       Compliance Domain
+Plural Name:        Compliance Domains
+Entity Set Name:    cpor_compliancedomains
+Schema Name:        cpor_ComplianceDomain
+Primary Field:      cpor_name
+Description:        The 20 compliance/regulatory domain categories used to
+                    classify regulatory pressures, crosswalk entries, and
+                    hypotheses. Authoritative controlled vocabulary.
+Alternate Key:      cpor_domaincode (unique text)
+
+FIELDS
+------
+Field Name                  Display Name              Type            Required  Notes
+--------------------------  ------------------------  --------------  --------  ----------------------------
+cpor_name                   Name                      Text (100)      Required  Full domain name
+                                                                                e.g. "Data protection & privacy"
+cpor_domaincode             Domain Code               Text (10)       Required  4-letter code: PRIV, FIN, etc.
+                                                                                Set as alternate key. Unique.
+cpor_commonregulatorbodytypes  Common Regulator Types  Text Area (500) None      From Compliance Domains.csv
+                                                                                CommonRegulatorBodyTypes column
+cpor_typicalcoverage        Typical Coverage          Text Area (500) None      From Compliance Domains.csv
+                                                                                TypicalCoverage column
+
+ALTERNATE KEY DEFINITION
+------------------------
+Key Name: Domain Code
+Fields:   cpor_domaincode
+Purpose:  Stage 7 emits domain codes (e.g. "PRIV") directly. dataverseWriter
+          binds using: cpor_compliancedomains(cpor_domaincode='PRIV')
+
+THE 20 DOMAIN CODES (from Compliance Domains.csv)
+--------------------------------------------------
+CORP    Corporate registration & company law
+TAX     Tax, revenue & customs
+LAB     Labor, employment & workplace safety
+PRIV    Data protection & privacy
+CYBER   Cybersecurity & digital resilience
+FIN     Banking, securities, payments & AML
+INS     Insurance
+HEALTH  Healthcare, medical products & public health
+FOOD    Food, beverage & agriculture
+ENV     Environment, climate & natural resources
+ENERGY  Energy & utilities
+TELCO   Telecommunications, media & broadcasting
+TRAN    Transportation & logistics
+CONS    Consumer protection, advertising & product safety
+COMP    Competition / antitrust
+TRADE   Trade, sanctions & export controls
+EDU     Education & social services
+REAL    Real estate, construction & zoning
+PROF    Professional services licensing
+PROC    Government procurement & grants
+
+VERIFICATION
+------------
+After Phase 7 data import:
+GET /cpor_compliancedomains?$select=cpor_domaincode,cpor_name&$orderby=cpor_domaincode
+Should return exactly 20 records.
+
+
+================================================================================
+ENTITY 2c — OOB territory (EXTEND, do not create)
+================================================================================
+The D365 Sales OOB territory entity (entity set: territories) already provides:
+  - territoryid (GUID, primary key)
+  - name (display name)
+  - parentterritoryid (self-referential FK — supports UN M49 hierarchy)
+  - managerid (team assignment — not used by this solution)
+
+Add these 5 custom columns to the OOB territory table via the Maker Portal.
+In the CPOR solution, select + Add existing > Table, choose Territory, then
+open the Territory table and add the columns below.
+
+FIELDS TO ADD
+-------------
+Field Name            Display Name       Type          Required  Notes
+--------------------  -----------------  ------------  --------  -------------------------
+cpor_territorycode    Territory Code     Text (20)     None      UN M49 code e.g. "EMEA-EU"
+                                                                 Set as ALTERNATE KEY (unique)
+cpor_territorytype    Territory Type     Choice        None      Options: cpor_territorytype
+                                                                 Global/Region/Subregion/
+                                                                 Supranational/Country
+cpor_jurisdictionlevel Jurisdiction Level Choice       None      Options: cpor_jurisdictionlevel
+                                                                 Global/Supranational/National/
+                                                                 Subnational/Sectoral
+cpor_isocountrycode   ISO Country Code   Text (3)      None      ISO2 e.g. "US", "DE"
+                                                                 Blank for supra-national nodes
+cpor_sourceurl        Source URL         URL           None      UN M49 reference URL
+
+ALTERNATE KEY DEFINITION
+------------------------
+Key Name: Territory Code
+Fields:   cpor_territorycode
+Purpose:  All @odata.bind references in Stage 0 and data imports use
+          territory code strings. Example:
+          territories(cpor_territorycode='EMEA-EU')
+
+PORTAL STEPS — Territory table extension
+-----------------------------------------
+In make.powerapps.com, open the CPOR solution.
+Select + Add existing > Table, find and add the Territory table to the solution.
+Open the Territory table, then select + New column for each field listed in the
+FIELDS TO ADD table above.
+
+After adding all 5 columns, create the alternate key:
+  - Open the Territory table > Keys tab
+  - Select + New key, name it "Territory Code"
+  - Add the cpor_territorycode column as the key field
+  - Save
+
+TERRITORY DATA NOTES
+--------------------
+The OOB territory entity typically already has records if the org uses
+territory-based routing. Do NOT delete existing territory records.
+
+The 34 UN M49 territory records from Territory.csv will be created as NEW
+records using the Maker Portal or data import. Existing OOB sales territory
+records are separate entries — they serve routing, not jurisdiction scoping.
+
+Sellers MUST assign the correct UN M49 territory to Leads (not a sales routing
+territory). The two types coexist in the same entity. The presence of
+cpor_territorycode distinguishes UN M49 records (populated) from routing
+records (blank cpor_territorycode).
+
+Stage 0 filters for territories where cpor_territorycode is not null when
+walking the hierarchy:
+  territories(${territoryId})?$select=cpor_territorycode,...
+
+VERIFICATION
+------------
+After Phase 7 data import:
+GET /territories?$filter=cpor_territorycode ne null&$select=name,cpor_territorycode
+Should return 34 rows. Verify parent hierarchy:
+GET /territories?$filter=cpor_territorycode eq 'NAM-US'
+  &$expand=parentterritoryid($select=cpor_territorycode,
+    $expand=parentterritoryid($select=cpor_territorycode))
+Should return: NAM-US -> NAM -> GLOBAL (3 levels)
+
+
+================================================================================
+ENTITY 2d — cpor_RegulatorySource
+================================================================================
+Display Name:       Regulatory Source
+Plural Name:        Regulatory Sources
+Entity Set Name:    cpor_regulatorysources
+Schema Name:        cpor_RegulatorySource
+Primary Field:      cpor_name
+Description:        Authoritative bodies, directories, and databases used as
+                    research starting points. Populates Stage 4 fallback URLs
+                    when no specific regulatory registration exists for an
+                    industry × territory × domain intersection.
+Alternate Key:      cpor_sourceid (unique text)
+
+FIELDS
+------
+Field Name            Display Name         Type          Required  Notes
+--------------------  -------------------  ------------  --------  --------------------------
+cpor_name             Name                 Text (200)    Required  Resource name
+                                                                   e.g. "WHO-Listed Authorities"
+cpor_sourceid         Source ID            Text (40)     Required  e.g. "SRC-WHO-WLA"
+                                                                   Set as ALTERNATE KEY. Unique.
+cpor_resourcetype     Resource Type        Text (100)    None      e.g. "Agency directory",
+                                                                   "Law database"
+cpor_compliancedomains Compliance Domains  Text Area(200) None     Semi-colon separated domain
+                                                                   codes this source covers.
+                                                                   Denormalized for quick lookup.
+                                                                   e.g. "PRIV;FIN;CYBER"
+cpor_publisherbody    Publisher / Body     Text (200)    None      e.g. "World Health Organization"
+cpor_url              URL                  URL           None      Primary access URL
+cpor_asofdate         As Of Date           Date Only     None      Date this entry was validated
+
+ALTERNATE KEY DEFINITION
+------------------------
+Key Name: Source ID
+Fields:   cpor_sourceid
+Purpose:  Territory Source Matrix CSV uses cpor_sourceid for relationships.
+          Import tooling resolves SRC-WHO-WLA to record GUID via alternate key.
+
+VERIFICATION
+------------
+After Phase 7 data import:
+GET /cpor_regulatorysources?$select=cpor_sourceid,cpor_name
+Should return 24+ records. Spot-check: SRC-WHO-WLA, SRC-EDPB, SRC-IOSCO
+all present.
+
+================================================================================
+END OF GUIDE 02
+================================================================================

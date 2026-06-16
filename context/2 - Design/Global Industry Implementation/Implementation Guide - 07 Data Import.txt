@@ -1,0 +1,380 @@
+================================================================================
+CPOR DURABLE — DATAVERSE CATALOG TIER EXTENSION
+Implementation Guide 07: Data Import
+Date: 2026-06-13
+================================================================================
+
+PURPOSE
+-------
+Import the industry crosswalk CSV files into the 7 new Dataverse catalog
+entities. Data must be imported in strict dependency order. Each step lists
+the source CSV, column mappings, and expected record count.
+
+SOURCE FILES (in context/0 - Discovery/Industry Crosswalk/)
+------------------------------------------------------------
+  Industry Codes.csv         → cpor_IndustryCode           (33 rows)
+  Compliance Domains.csv     → cpor_ComplianceDomain        (20 rows)
+  Territory.csv              → territory (OOB, extension)   (34 rows)
+  Compliance Registry.csv    → cpor_RegulatorySource        (24+ rows)
+  Industry Domain Matrix.csv → cpor_IndustryDomainMap       (many rows)
+  Territory Source Matrix.csv→ cpor_TerritorySourceMap      (many rows)
+  Industry Import Template.csv → cpor_RegulatoryRegistration (seed rows)
+
+RECOMMENDED IMPORT TOOL: Power Platform Dataflows or the D365 Data Import Wizard.
+For large CSV files, Dataflows is preferred. For small files (<100 rows), the
+Data Import Wizard (Settings > Data Management > Imports) works well.
+
+ALTERNATIVE: For full automation, write a Node.js import script that reads the
+CSV files and POSTs records via OData using the same dvRequest() pattern in
+dataverseWriter.js. This guide documents the manual import steps; the
+automated approach is equivalent.
+
+
+================================================================================
+STEP 1: Import cpor_IndustryCode (from Industry Codes.csv)
+================================================================================
+PREREQUISITE: None (first in chain)
+SOURCE: Industry Codes.csv
+TARGET: cpor_industrycodes
+EXPECTED ROWS: 33
+
+COLUMN MAPPING
+--------------
+CSV Column              → Dataverse Field
+----------------------  ----------------------------------------
+IndustryName            → cpor_name (primary field)
+IndustryCode            → cpor_d365industrycode
+SourceURL               → cpor_sourceurl
+[no CSV column]         → cpor_industrycloudvertical
+
+NOTE: cpor_industrycloudvertical is NOT in the CSV. Set it manually for each
+row using the mapping table in Guide 02 (Industry Code → Cloud Vertical).
+If using Dataflows, add a calculated column in Power Query that maps
+the integer IndustryCode to the optionset integer value:
+  Financial (16) → 154080000 (Financial Services)
+  Healthcare (11) → 154080001 (Healthcare and Life Sciences)
+  etc.
+
+See Guide 02 for the full 33-row mapping.
+
+POST-IMPORT VERIFICATION
+------------------------
+GET /cpor_industrycodes?$select=cpor_name,cpor_d365industrycode,cpor_industrycloudvertical
+Expected: 33 records
+Spot check: cpor_d365industrycode eq 16 → Financial, industrycloudvertical populated
+
+
+================================================================================
+STEP 2: Import cpor_ComplianceDomain (from Compliance Domains.csv)
+================================================================================
+PREREQUISITE: None (independent of Step 1)
+SOURCE: Compliance Domains.csv
+TARGET: cpor_compliancedomains
+EXPECTED ROWS: 20
+
+COLUMN MAPPING
+--------------
+CSV Column                → Dataverse Field
+------------------------  ----------------------------------------
+DomainName                → cpor_name (primary field)
+DomainCode                → cpor_domaincode (alternate key)
+CommonRegulatorBodyTypes  → cpor_commonregulatorbodytypes
+TypicalCoverage           → cpor_typicalcoverage
+
+POST-IMPORT VERIFICATION
+------------------------
+GET /cpor_compliancedomains?$select=cpor_domaincode,cpor_name&$orderby=cpor_domaincode
+Expected: 20 records with domain codes CORP, TAX, LAB, PRIV, CYBER, FIN,
+INS, HEALTH, FOOD, ENV, ENERGY, TELCO, TRAN, CONS, COMP, TRADE, EDU, REAL,
+PROF, PROC all present.
+
+
+================================================================================
+STEP 3: Import territory (PASS 1 — root nodes) from Territory.csv
+================================================================================
+PREREQUISITE: OOB territory entity must have custom fields from Phase 2 deployed.
+SOURCE: Territory.csv
+TARGET: territories
+EXPECTED ROWS: 34 (UN M49 hierarchy nodes — does NOT include existing sales territory records)
+
+IMPORTANT: This imports NEW territory records. Do NOT use "Update existing records"
+or "Match on name" if the org already has sales territory records. Use
+"Import as new records" or match ONLY on cpor_territorycode.
+
+COLUMN MAPPING (Pass 1 — leaf and top-level nodes, parentterritoryid left NULL)
+--------------------------------------------------------------------------------
+CSV Column              → Dataverse Field
+----------------------  ----------------------------------------
+TerritoryName           → name (OOB primary field)
+TerritoryCode           → cpor_territorycode
+TerritoryType           → cpor_territorytype (optionset integer, see below)
+JurisdictionLevel       → cpor_jurisdictionlevel (optionset integer, see below)
+ISOCountryCode          → cpor_isocountrycode
+SourceURL               → cpor_sourceurl
+[ParentTerritoryCode]   → LEAVE BLANK IN PASS 1
+
+OPTIONSET MAPPING FOR IMPORT
+-----------------------------
+cpor_territorytype:
+  Global        → 154080000
+  Region        → 154080001
+  Subregion     → 154080002
+  Supranational → 154080003
+  Country       → 154080004
+
+cpor_jurisdictionlevel:
+  Global        → 154080000
+  Supranational → 154080001
+  National      → 154080002
+  Subnational   → 154080003
+  Sectoral      → 154080004
+
+
+================================================================================
+STEP 4: Import territory (PASS 2 — parentterritoryid hierarchy)
+================================================================================
+PREREQUISITE: Step 3 complete (all 34 territory nodes exist)
+SOURCE: Territory.csv (same file, using ParentTerritoryCode column)
+TARGET: territories (UPSERT matching on cpor_territorycode)
+
+In Pass 2, PATCH each territory record to set parentterritoryid using the
+GUID resolved from the parent's cpor_territorycode alternate key.
+
+DATAFLOW PATTERN (Power Query M)
+---------------------------------
+// After Step 3, in a new Dataflow:
+// 1. Read Territory.csv
+// 2. Filter rows where ParentTerritoryCode is not blank
+// 3. Left join with territories entity on cpor_territorycode to get parentGuid
+// 4. Set parentterritoryid = parentGuid
+// 5. Upsert matching on cpor_territorycode
+
+MANUAL PATTERN (small data set — 10 non-root nodes):
+------------------------------------------------------
+For each territory that has a parent, PATCH using:
+  PATCH /territories(cpor_territorycode='{childCode}')
+  { "parentterritoryid@odata.bind": "/territories(cpor_territorycode='{parentCode}')" }
+
+EXPECTED HIERARCHY (top 3 levels only)
+---------------------------------------
+GLOBAL (root)
+  ├─ EMEA (Region)
+  │    ├─ EMEA-EU (Supranational)
+  │    │    └─ DE, FR, NL, PL, ES ... (Country nodes)
+  │    └─ EMEA-MEA (Subregion)
+  ├─ NAM (Region)
+  │    ├─ NAM-US (Country)
+  │    └─ NAM-CA (Country)
+  ├─ APAC (Region)
+  │    └─ APAC-ANZ, APAC-SEA, etc.
+  └─ LAC (Region)
+       └─ LAC-BR, etc.
+
+POST-IMPORT VERIFICATION
+------------------------
+GET /territories?$filter=cpor_territorycode eq 'NAM-US'
+  &$expand=parentterritoryid($select=cpor_territorycode,
+    $expand=parentterritoryid($select=cpor_territorycode))
+Expected: NAM-US → NAM → GLOBAL hierarchy confirmed.
+
+GET /territories?$filter=cpor_territorycode ne null and parentterritoryid eq null
+Expected: Only 1 record (GLOBAL with no parent)
+
+
+================================================================================
+STEP 5: Import cpor_RegulatorySource (from Compliance Registry.csv)
+================================================================================
+PREREQUISITE: None (independent taxonomy)
+SOURCE: Compliance Registry.csv
+TARGET: cpor_regulatorysources
+EXPECTED ROWS: 24+ (varies by CSV version)
+
+COLUMN MAPPING
+--------------
+CSV Column              → Dataverse Field
+----------------------  ----------------------------------------
+SourceID                → cpor_sourceid (alternate key)
+SourceName              → cpor_name
+ResourceType            → cpor_resourcetype
+ComplianceDomains       → cpor_compliancedomains (semi-colon separated codes)
+PublisherBody           → cpor_publisherbody
+URL                     → cpor_url
+AsOfDate                → cpor_asofdate
+
+POST-IMPORT VERIFICATION
+------------------------
+GET /cpor_regulatorysources?$select=cpor_sourceid,cpor_name
+Expected: All rows present. Spot check: SRC-EDPB (European Data Protection Board)
+
+
+================================================================================
+STEP 6: Import cpor_IndustryDomainMap (from Industry Domain Matrix.csv)
+================================================================================
+PREREQUISITE: Steps 1 and 2 (cpor_IndustryCode and cpor_ComplianceDomain exist)
+SOURCE: Industry Domain Matrix.csv
+TARGET: cpor_industrydomainmaps
+
+COLUMN MAPPING
+--------------
+CSV Column              → Dataverse Field
+----------------------  ----------------------------------------
+MappingName             → cpor_name (auto or "IndustryName × DomainName")
+IndustryCode            → cpor_industrycodeid via alternate key:
+                            cpor_industrycodes(cpor_d365industrycode={integer})
+DomainCode              → cpor_compliancedomainid via alternate key:
+                            cpor_compliancedomains(cpor_domaincode='{code}')
+Priority                → cpor_implementationpriority (optionset integer)
+PrimarySourceIDs        → cpor_primarysourceids
+PrimarySourceURLs       → cpor_primarysourceurls
+MappingNote             → cpor_dataversemappingnote
+
+PRIORITY OPTIONSET MAPPING
+---------------------------
+  High    → 154080000
+  Medium  → 154080001
+  Low     → 154080002
+
+NOTE ON ALTERNATE KEY RESOLUTION IN DATAFLOWS
+----------------------------------------------
+Power Automate Dataflows do not natively support alternate key @odata.bind.
+Use a lookup step in Power Query to resolve IndustryCode integer to GUID:
+  1. Load cpor_IndustryCode table
+  2. Merge on cpor_d365industrycode = IndustryCode column from CSV
+  3. Extract cpor_industrycodeid (GUID) into the mapping row
+  4. Use that GUID as the lookup value
+
+Apply the same approach for DomainCode → cpor_compliancedomainid GUID.
+
+POST-IMPORT VERIFICATION
+------------------------
+Filter cpor_industrydomainmaps where industrycodeid = [Financial guid]
+Expected: 8-12 domain mappings including PRIV, FIN, COMP, TRADE, CYBER
+
+
+================================================================================
+STEP 7: Import cpor_TerritorySourceMap (from Territory Source Matrix.csv)
+================================================================================
+PREREQUISITE: Steps 2, 3/4, and 5
+SOURCE: Territory Source Matrix.csv
+TARGET: cpor_territorysourcemaps
+
+COLUMN MAPPING
+--------------
+CSV Column              → Dataverse Field
+----------------------  ----------------------------------------
+MapName                 → cpor_name
+TerritoryCode           → cpor_territoryid via alternate key:
+                            territories(cpor_territorycode='{code}')
+DomainCode              → cpor_compliancedomainid via alternate key:
+                            cpor_compliancedomains(cpor_domaincode='{code}')
+SourceID                → cpor_regulatorysourceid via alternate key:
+                            cpor_regulatorysources(cpor_sourceid='{id}')
+UsageNote               → cpor_usagenote
+
+POST-IMPORT VERIFICATION
+------------------------
+GET /cpor_territorysourcemaps
+  ?$filter=cpor_territoryid/cpor_territorycode eq 'EMEA-EU'
+           and cpor_compliancedomainid/cpor_domaincode eq 'PRIV'
+  &$expand=cpor_regulatorysourceid($select=cpor_name,cpor_url)
+Expected: 1 record with regulatory source = EDPB URL
+
+
+================================================================================
+STEP 8: Import cpor_RegulatoryRegistration seed data
+================================================================================
+PREREQUISITE: Steps 1, 3/4, 2 (IndustryCode, territory, ComplianceDomain exist)
+SOURCE: Industry Import Template.csv (4 seed records)
+TARGET: cpor_regulatoryregistrations
+
+See Guide 04 for the 4 seed records. These are the minimum required to test
+Stage 0 end-to-end before analyst team populates the full catalog.
+
+After creating seed records, set cpor_lastverifieddate = today and
+cpor_status = 'Active' on all 4 records.
+
+COLUMN MAPPING (for ongoing bulk import by analyst team)
+---------------------------------------------------------
+CSV Column              → Dataverse Field
+----------------------  ----------------------------------------
+RegistrationName        → cpor_name
+IndustryCode            → cpor_industrycodeid (alternate key)
+TerritoryCode           → cpor_territoryid (alternate key)
+DomainCode              → cpor_compliancedomainid (alternate key)
+SourceID                → cpor_regulatorysourceid (alternate key, optional)
+RegulatorBodyName       → cpor_regulatorbodyname
+RegulatorType           → cpor_regulatortype
+RegulatorWebsiteURL     → cpor_regulatorwebsiteurl
+LegislationName         → cpor_legislationname
+LegalType               → cpor_legaltype (optionset integer)
+LegislationURL          → cpor_legislationurl
+ApplicabilityRule       → cpor_applicabilityrule
+Mandatory               → cpor_mandatory (1=Yes, 0=No)
+RiskRating              → cpor_riskrating (optionset integer)
+Status                  → cpor_status
+EffectiveDate           → cpor_effectivedate
+ComplianceDeadline      → cpor_compliancedeadline
+LastVerifiedDate        → cpor_lastverifieddate
+NextSignificantDate     → cpor_nextsignificantdate
+Owner                   → cpor_owner
+Notes                   → cpor_notes
+
+LEGAL TYPE OPTIONSET MAPPING
+-----------------------------
+  Act         → 154080000
+  Regulation  → 154080001
+  Directive   → 154080002
+  Standard    → 154080003
+  Guidance    → 154080004
+  Framework   → 154080005
+
+RISK RATING OPTIONSET MAPPING
+------------------------------
+  High        → 154080000
+  Medium      → 154080001
+  Low         → 154080002
+
+
+================================================================================
+FULL IMPORT VERIFICATION FETCHXML
+================================================================================
+
+1. Verify complete catalog hierarchy is navigable:
+   GET /cpor_regulatoryregistrations
+     ?$expand=
+       cpor_industrycodeid($select=cpor_name,cpor_d365industrycode),
+       cpor_territoryid($select=cpor_territorycode,name),
+       cpor_compliancedomainid($select=cpor_domaincode,cpor_name),
+       cpor_regulatorysourceid($select=cpor_name)
+     &$filter=cpor_status eq 'Active'
+   Expected: 4 seed records with all 4 FKs expanded and populated.
+
+2. Verify Stage 0 query returns expected data for test Lead:
+   Assumes Lead has territory = NAM-US and industrycode = 16 (Financial)
+   GET /cpor_regulatoryregistrations
+     ?$filter=
+       _cpor_industrycodeid_value eq {financialIndustryCodeGuid}
+       and (_cpor_territoryid_value eq {namUSGuid}
+            or _cpor_territoryid_value eq {namGuid}
+            or _cpor_territoryid_value eq {globalGuid})
+       and cpor_status eq 'Active'
+     &$orderby=cpor_territoryid/cpor_jurisdictionlevel desc
+   Expected: ISO 27001 (GLOBAL) returned; plus any US-specific records added
+
+3. Verify fallback path (no registration for a domain):
+   Query cpor_territorysourcemaps for PRIV + NAM-US
+   Expected: 1 source record (e.g. NIST Privacy Framework)
+   This verifies the researchSources[] fallback chain works
+
+4. Count verification (end of full import):
+   cpor_industrycodes:      33 records
+   cpor_compliancedomains:  20 records
+   territories (cpor_territorycode ne null): 34 records
+   cpor_regulatorysources:  ≥ 24 records
+   cpor_industrydomainmaps: ≥ 60 records (varies by CSV)
+   cpor_territorysourcemaps: ≥ 30 records (varies by CSV)
+   cpor_regulatoryregistrations: ≥ 4 seed records
+
+================================================================================
+END OF GUIDE 07
+================================================================================

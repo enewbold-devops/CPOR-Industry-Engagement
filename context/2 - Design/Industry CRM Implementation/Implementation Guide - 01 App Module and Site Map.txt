@@ -1,0 +1,219 @@
+================================================================================
+CPOR DURABLE — INDUSTRY CRM IMPLEMENTATION
+Implementation Guide 01: App Module and Site Map
+Date: 2026-06-15
+================================================================================
+
+PURPOSE
+-------
+Create the "CPOR Industry Catalog" Model Driven App and configure its site map
+so the Global Industry Team has a clean, role-gated entry point into the
+catalog tier. This guide must be completed before views (Guide 02), forms
+(Guide 03), and the dashboard (Guide 04) can be associated with the app.
+
+PREREQUISITE: GII Guides 00-07 fully deployed and verified (see CRM Guide 00).
+
+
+================================================================================
+SECTION 1: CREATE THE APP MODULE
+================================================================================
+
+PORTAL STEPS
+------------
+1. Navigate to make.powerapps.com.
+   Select the correct environment (the one containing the CPOR solution).
+
+2. Open the CPOR solution.
+   Select Objects in the left navigation, then select Apps from the object
+   type list.
+
+3. Select + New App > Model-driven app from the command bar.
+   The New Model-driven app dialog opens.
+
+4. Complete the app properties as follows:
+
+   Field               Value
+   ----------------    ---------------------------------------------------
+   Name                CPOR Industry Catalog
+   Unique Name         cpor_CPORIndustryCatalog
+   Description         Global Industry Team catalog management app for
+                       curating industry codes, compliance domains,
+                       territories, regulatory sources, crosswalk maps,
+                       and regulatory registrations.
+   Icon                (leave default or assign a custom SVG — see Note below)
+
+   NOTE ON ICON: The icon is optional at this stage. To assign a custom icon,
+   upload a 16x16 SVG to the solution as a Web Resource (type: SVG) named
+   cpor_/media/industry_catalog_icon.svg, then reference it here. The
+   webresources/media/ folder is reserved for this purpose.
+
+5. Select Create.
+   The App Designer opens in the CPOR solution context.
+
+
+================================================================================
+SECTION 2: CONFIGURE THE APP DESIGNER
+================================================================================
+
+The App Designer has two panes: Pages (left) and Properties (right).
+All site map structure is defined in Pages.
+
+RECOMMENDED APPROACH: Use the site map editor directly. Select Navigation
+from the Pages panel, then use the + Add page and + Add group controls to
+build the structure below.
+
+SITE MAP TARGET STRUCTURE
+--------------------------
+
+Area: Dashboard
+  Group: My Work
+    Page: Catalog Health (Dashboard)      [type: Dashboard]
+
+Area: Taxonomy
+  Group: Reference Data
+    Page: Industry Codes                  [type: Table — cpor_IndustryCode]
+    Page: Compliance Domains              [type: Table — cpor_ComplianceDomain]
+    Page: Territories                     [type: Table — territory]
+    Page: Regulatory Sources              [type: Table — cpor_RegulatorySource]
+
+Area: Crosswalk
+  Group: Mapping Tables
+    Page: Industry Domain Maps            [type: Table — cpor_IndustryDomainMap]
+    Page: Territory Source Maps           [type: Table — cpor_TerritorySourceMap]
+
+Area: Registrations
+  Group: Regulatory Catalog
+    Page: Regulatory Registrations        [type: Table — cpor_RegulatoryRegistration]
+
+PORTAL STEPS FOR EACH AREA
+----------------------------
+For each entry in the structure above:
+
+1. Select + Add page in the Pages panel.
+2. Select the page type (Dashboard or Table).
+3. For Table pages: select the table from the list (filter by "cpor_" to
+   find custom entities quickly; search "territory" for the OOB entity).
+4. Set the page label (Title) exactly as shown in the structure above.
+5. Use the drag handle to arrange pages within groups and areas.
+
+AREA AND GROUP LABELS
+---------------------
+After adding all pages, select each Area node and set its display label:
+
+  Area node label       Display Label
+  ------------------    ---------------------
+  (first area)          Dashboard
+  (second area)         Taxonomy
+  (third area)          Crosswalk
+  (fourth area)         Registrations
+
+Select each Group node within each Area and set its display label:
+
+  Group within Dashboard     My Work
+  Group within Taxonomy      Reference Data
+  Group within Crosswalk     Mapping Tables
+  Group within Registrations Regulatory Catalog
+
+NAVIGATION SETTINGS
+--------------------
+In the app Properties panel (right pane):
+  - Confirm "Navigation" is set to the site map just configured.
+  - Leave "Welcome page" disabled for this release.
+
+NOTE: By default, MDA shows all views for a table when you navigate to a
+Table page. The default view (marked in Guide 02) will be selected
+automatically. The full view selector is accessible to the user from the
+view dropdown on each table page.
+
+
+================================================================================
+SECTION 3: ASSIGN SECURITY ROLES
+================================================================================
+
+Only the "CPOR Global Industry Team" role should have access to this app.
+System Administrator retains access by platform default.
+
+PORTAL STEPS
+------------
+1. In the App Designer, select the Settings icon (gear) or navigate to
+   the app's Properties panel and select Manage roles.
+
+2. In the Manage Roles dialog, search for and select:
+     CPOR Global Industry Team
+
+3. Ensure no other custom roles are selected. System Administrator is
+   implicitly included and does not need to be listed here.
+
+4. Select Save.
+
+IMPORTANT: The CPOR Sales Team Member role must NOT be added here. Sales team
+members access catalog data only through lookup field expansion on their own
+forms in the CPOR Sales app. They do not need access to this app.
+
+
+================================================================================
+SECTION 4: PUBLISH THE APP
+================================================================================
+
+1. Select Publish in the App Designer command bar.
+   Wait for the publish operation to complete.
+
+2. Select Play to open the app in a new browser tab and confirm:
+   - The app loads with the Dashboard area as the default landing page.
+   - All 4 areas (Dashboard, Taxonomy, Crosswalk, Registrations) are visible
+     in the left navigation.
+   - All 8 table pages are accessible.
+   - No "access denied" errors appear when navigating to any area.
+
+NOTE: At this stage, each table page will show the system default views
+and forms. Custom views and forms from Guides 02 and 03 will appear after
+they are created and added to the CPOR solution.
+
+NOTE: The Dashboard area will show an empty dashboard tile or a "no dashboard"
+state until the Catalog Health Dashboard is created in Guide 04. This is
+expected behavior.
+
+
+================================================================================
+SECTION 5: ADD APP TO SOLUTION
+================================================================================
+
+The App Module must be included in the CPOR solution to be deployed with the
+solution package.
+
+If the app was created inside the CPOR solution (step 2 in Section 1), it is
+already included. Verify:
+
+  In the CPOR solution, select Objects > Apps.
+  Confirm "CPOR Industry Catalog" (cpor_CPORIndustryCatalog) is listed.
+
+If it is NOT listed (e.g. app was created outside the solution):
+  Select Add existing > App > Model-driven app from the solution command bar.
+  Search for "CPOR Industry Catalog" and add it.
+
+
+================================================================================
+VERIFICATION
+================================================================================
+
+PORTAL CHECK
+------------
+1. Log in as a test user assigned only the "CPOR Global Industry Team" role
+   (not System Administrator).
+2. Navigate to make.powerapps.com > Apps.
+   Confirm "CPOR Industry Catalog" is visible in the app list.
+   Confirm "CPOR Sales" (the seller app) does NOT appear unless the test
+   user also holds the sales role.
+3. Open CPOR Industry Catalog.
+   Confirm 4 navigation areas: Dashboard, Taxonomy, Crosswalk, Registrations.
+4. Navigate to Taxonomy > Industry Codes.
+   Confirm the table loads and shows records (expects 33 rows from GII import).
+5. Navigate to Registrations > Regulatory Registrations.
+   Confirm the table loads (may be empty if no registrations imported yet).
+
+SOLUTION CHECK
+--------------
+In the CPOR solution:
+  Objects > Apps should list: cpor_CPORIndustryCatalog
+  Objects > Security Roles should list: CPOR Global Industry Team
+  The app's security roles should reference only: CPOR Global Industry Team

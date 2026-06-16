@@ -1,0 +1,286 @@
+================================================================================
+CPOR DURABLE — INDUSTRY CRM IMPLEMENTATION
+Implementation Guide 04: Catalog Health Dashboard
+Date: 2026-06-15
+================================================================================
+
+PURPOSE
+-------
+Create an interactive Model Driven App dashboard that gives the Global
+Industry Team an operational overview of the catalog's health at a glance.
+The dashboard is the default landing page of the CPOR Industry Catalog app.
+
+The dashboard answers four operational questions immediately upon login:
+  1. How many active registrations exist, and which Industry Cloud Verticals
+     are covered?
+  2. How many records are stale and need reverification?
+  3. Which regulations have a compliance deadline approaching in the next 90 days?
+  4. Which High Risk active regulations have not been recently verified?
+
+PREREQUISITE: Guide 02 (Views) complete. The dashboard tiles reference
+the views created in Guide 02. Views must be published before the dashboard
+can reference them.
+
+
+================================================================================
+SECTION 1: CREATE THE DASHBOARD
+================================================================================
+
+PORTAL STEPS
+------------
+1. In make.powerapps.com, open the CPOR solution.
+2. Select Objects > Dashboards from the object type list.
+3. Select + New dashboard > Standard dashboard (2-column layout) from the
+   command bar.
+
+DASHBOARD PROPERTIES
+--------------------
+  Name:          CPOR Catalog Health
+  Layout:        2-Column Regular Dashboard
+                 (standard 2-column with header area)
+
+Select Create (or OK) to open the dashboard designer.
+
+NOTE: If a "Classic" dashboard designer opens, use it as described below.
+The Classic designer is the standard MDA dashboard tool and supports all
+the tile types specified here. If the new "interactive" experience is
+available in your org, the steps are equivalent but the UI differs slightly.
+
+
+================================================================================
+SECTION 2: DASHBOARD TILE LAYOUT
+================================================================================
+
+The 2-column dashboard has 6 tile slots arranged as:
+
+  [ Slot 1 — Top Left    ] [ Slot 2 — Top Right   ]
+  [ Slot 3 — Middle Left ] [ Slot 4 — Middle Right ]
+  [ Slot 5 — Bottom Left ] [ Slot 6 — Bottom Right ]
+
+Configure the 6 slots as follows:
+
+  Slot  Type            Entity / View / Chart
+  ----  --------------  --------------------------------------------------
+  1     Chart           Active by Vertical (bar chart — see Section 3)
+  2     Number Tile     Stale Count (see Section 4)
+  3     List            Approaching Deadlines (see Section 5)
+  4     List            High Risk Unverified (see Section 6)
+  5     List shortcut   Stale view quick-link (see Section 7)
+  6     List shortcut   High Risk view quick-link (see Section 7)
+
+
+================================================================================
+SECTION 3: SLOT 1 — CHART: Active Registrations by Industry Cloud Vertical
+================================================================================
+
+STEP 1: Create the chart on cpor_RegulatoryRegistration
+
+Before adding to the dashboard, create a chart on the
+cpor_RegulatoryRegistration table:
+
+  Navigate to Objects > Tables > cpor_RegulatoryRegistration > Charts.
+  Select + New chart.
+
+  Chart Name: Active Registrations by Industry Cloud Vertical
+  Chart Type: Vertical Bar (Column chart)
+
+  Series (Y Axis — Count):
+    Field:     cpor_name
+    Aggregate: Count
+
+  Category (X Axis — Group By):
+    Field:     cpor_industrycodeid → cpor_industrycloudvertical
+               (related column from Industry Code's Industry Cloud Vertical)
+
+  NOTE ON RELATED COLUMN: To group by a field on a related entity, in the
+  chart designer select the related column by navigating the field picker:
+  cpor_industrycodeid (Industry Code) > cpor_industrycloudvertical.
+  The chart then groups registration count by the Industry Cloud Vertical
+  of the linked Industry Code.
+
+  View filter applied: Active Registrations view (the chart automatically
+  applies the default view's filter when the dashboard renders).
+  To enforce the "Active only" filter explicitly, also select
+  "Active Registrations" as the view in the dashboard chart component below.
+
+  Save the chart.
+
+STEP 2: Add chart to Slot 1
+
+  In the dashboard designer, select the + button in Slot 1.
+  Select Chart.
+  Configure:
+    Entity:     cpor_RegulatoryRegistration (Regulatory Registration)
+    View:       Active Registrations
+    Chart:      Active Registrations by Industry Cloud Vertical
+  Select Add.
+
+  The slot renders a bar chart showing Active registration count grouped
+  by Microsoft Industry Cloud vertical.
+
+
+================================================================================
+SECTION 4: SLOT 2 — NUMBER TILE: Stale Count
+================================================================================
+
+MDA standard dashboards do not have a native "Number Tile" control.
+Use a List tile with a single-column view and row count to approximate this.
+
+APPROACH: Add a List tile pointing to the "Stale — Needs Reverification" view.
+The list header shows the view name. The number of visible rows indicates
+the stale count. The analyst can click through to the full view.
+
+  In the dashboard designer, select the + button in Slot 2.
+  Select List.
+  Configure:
+    Entity:      cpor_RegulatoryRegistration (Regulatory Registration)
+    View:        Stale — Needs Reverification
+    Record count to display:  5 (show top 5 stale records; label indicates more)
+  Select Add.
+
+NOTE ON NUMBER TILE ALTERNATIVE: If your org has Power BI embedded dashboards
+available, a Power BI tile showing COUNT of stale records is the preferred
+implementation for a true number tile. A Power BI dataset query would be:
+  EVALUATE
+    SUMMARIZE(
+      FILTER(
+        cpor_regulatoryregistrations,
+        cpor_regulatoryregistrations[cpor_status] = "Active"
+        && cpor_regulatoryregistrations[cpor_lastverifieddate]
+           < TODAY() - 180
+      ),
+      "Stale Count", COUNTROWS(cpor_regulatoryregistrations)
+    )
+Defer this to a future release if Power BI is not yet integrated.
+
+
+================================================================================
+SECTION 5: SLOT 3 — LIST: Approaching Compliance Deadlines
+================================================================================
+
+  In the dashboard designer, select the + button in Slot 3.
+  Select List.
+  Configure:
+    Entity:      cpor_RegulatoryRegistration (Regulatory Registration)
+    View:        Approaching Compliance Deadlines
+    Record count to display:  10
+  Select Add.
+
+  The list shows the 10 most urgently approaching compliance deadlines
+  (sorted ascending by deadline per Guide 02 View 3).
+  Analysts can click any record to open its full form.
+
+
+================================================================================
+SECTION 6: SLOT 4 — LIST: High Risk Active — Unverified
+================================================================================
+
+  In the dashboard designer, select the + button in Slot 4.
+  Select List.
+  Configure:
+    Entity:      cpor_RegulatoryRegistration (Regulatory Registration)
+    View:        High Risk — Active
+    Record count to display:  10
+  Select Add.
+
+  The list shows High Risk active registrations sorted by compliance deadline.
+  This quadrant draws attention to the highest-consequence regulations.
+
+
+================================================================================
+SECTION 7: SLOTS 5 AND 6 — QUICK LINK LISTS
+================================================================================
+
+Slots 5 and 6 provide fast navigation to the two most-used analyst work queues.
+
+SLOT 5 — Stale View Shortcut
+
+  In the dashboard designer, select the + button in Slot 5.
+  Select List.
+  Configure:
+    Entity:      cpor_RegulatoryRegistration (Regulatory Registration)
+    View:        Stale — Needs Reverification
+    Record count to display:  6
+  Select Add.
+
+  NOTE: This is intentionally a duplicate of Slot 2 but at the bottom for
+  quick scrolling to action. Analysts use Slot 2 for awareness and Slot 5
+  as the direct entry point to the work queue. If the dashboard layout
+  feels redundant, remove Slot 5 and replace with a different entity list
+  (e.g. top 6 most recently modified cpor_IndustryDomainMap records).
+
+SLOT 6 — High Risk View Shortcut
+
+  In the dashboard designer, select the + button in Slot 6.
+  Select List.
+  Configure:
+    Entity:      cpor_RegulatoryRegistration (Regulatory Registration)
+    View:        High Risk — Active
+    Record count to display:  6
+  Select Add.
+
+
+================================================================================
+SECTION 8: SAVE AND PUBLISH THE DASHBOARD
+================================================================================
+
+1. Select Save from the dashboard designer command bar.
+   Confirm the dashboard name is "CPOR Catalog Health".
+
+2. Select Close to exit the designer.
+
+3. In the CPOR solution's Dashboards list, confirm "CPOR Catalog Health" appears.
+
+4. Publish the dashboard by selecting it and choosing Publish from the
+   command bar (or publish the whole solution).
+
+
+================================================================================
+SECTION 9: SET AS DEFAULT DASHBOARD IN THE APP
+================================================================================
+
+The dashboard must be set as the default for the CPOR Industry Catalog app
+so it loads immediately when analysts open the app.
+
+PORTAL STEPS
+------------
+1. In make.powerapps.com, open the CPOR solution.
+2. Select Objects > Apps > CPOR Industry Catalog.
+3. Open the App Designer.
+4. In the Pages panel, select the Dashboard page in the Dashboard area.
+5. In the Properties panel (right side), locate the Dashboard dropdown.
+6. Select "CPOR Catalog Health" from the list.
+7. Select Publish.
+
+RESULT: The next time a Global Industry Team member opens CPOR Industry
+Catalog, the Catalog Health dashboard loads as the first screen.
+
+
+================================================================================
+VERIFICATION
+================================================================================
+
+1. Open CPOR Industry Catalog as a Global Industry Team member.
+   Confirm the Catalog Health dashboard is the default landing page.
+
+2. Confirm 6 tiles are visible in the 2-column layout.
+
+3. Slot 1 (bar chart): Confirm the chart renders without error.
+   If no Active registrations exist, the chart area shows empty state.
+   Import at least one cpor_RegulatoryRegistration record with cpor_status
+   = "Active" and verify the chart renders a bar for the related vertical.
+
+4. Slot 3 (Approaching Deadlines list): Confirm the list shows records
+   with cpor_compliancedeadline within the next 90 days.
+   If none exist, import a test record with cpor_compliancedeadline = today + 30.
+
+5. Click any record in any list tile.
+   Confirm the record opens in the full cpor_RegulatoryRegistration form
+   as defined in Guide 03.
+
+6. Click the "view" link in any list tile header.
+   Confirm the full view opens in the Registrations table page, showing
+   all records matching that view's filter.
+
+7. Navigate away from the dashboard and back to the Dashboard area.
+   Confirm "CPOR Catalog Health" remains the default selection.

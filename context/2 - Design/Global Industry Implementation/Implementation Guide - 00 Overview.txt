@@ -1,0 +1,117 @@
+================================================================================
+CPOR DURABLE — DATAVERSE CATALOG TIER EXTENSION
+Implementation Guide 00: Overview, Decisions, and Phase Map
+Date: 2026-06-13
+================================================================================
+
+PURPOSE
+-------
+Extend the deployed CPOR Dynamics 365 Sales solution with a Global Industry
+Catalog tier. The catalog grounds hypothesis generation in authoritative
+industry/territory/regulatory reference data maintained by the Global Industry
+Team, replacing LLM model recall with catalog verification for Regulatory and
+Industry category hypotheses.
+
+Before this extension, every regulatory claim in the pipeline is free-text
+recalled from model training — inconsistent, hallucination-prone, and
+untraceable in Dataverse. After this extension, each Regulatory hypothesis
+carries a FK to a cpor_RegulatoryRegistration record that names the specific
+law, regulator, URL, risk rating, and compliance deadline.
+
+
+LOCKED DESIGN DECISIONS
+-----------------------
+1.  OOB territory entity is EXTENDED (not replaced).
+    D365 Sales already has a territory entity used for sales routing. We add
+    5 custom fields (cpor_territorycode, cpor_territorytype,
+    cpor_jurisdictionlevel, cpor_isocountrycode, cpor_sourceurl) to this
+    existing entity. The OOB parentterritoryid self-join already supports the
+    UN M49 hierarchy we need. NO new custom territory entity is created.
+
+2.  Lead is scoped to ONE territory per engagement.
+    A seller entering a globally-operating company (e.g. Toyota) creates one
+    Lead per territory of operational impact. Toyota Japan and Toyota EMEA are
+    separate Leads with independent pipeline runs. The OOB territoryid field on
+    Lead IS the jurisdiction anchor for Stage 0. No cpor_OperatingCountries
+    field is needed.
+
+3.  Parent Account mapping is OUT OF SCOPE.
+    Account Managers can map subsidiary Leads (Toyota Japan, Toyota EMEA) to a
+    parent Account using standard D365 account hierarchy. This is a standard
+    D365 account management workflow, not part of this orchestration.
+
+4.  cpor_territorycode is the alternate key on OOB territory.
+    All @odata.bind references in Stage 0 queries and data imports use the
+    territory code string (e.g. "EMEA-EU") rather than GUIDs for readability
+    and maintainability.
+
+5.  cpor_domaincode is the alternate key on cpor_ComplianceDomain.
+    Same rationale. Stage 7 emits domain codes (e.g. "PRIV") directly.
+    dataverseWriter.js binds using alternate key syntax.
+
+6.  Catalog entities use UserOwned ownership.
+    Consistent with existing custom entities in the solution. Roles grant
+    Global-level access to the catalog entities for appropriate principals.
+
+7.  Freshness gate of 90 days (configurable).
+    cpor_RegulatoryRegistration rows older than CATALOG_FRESHNESS_DAYS env var
+    are excluded from Stage 0 supply. Stale rows fall back to
+    cpor_TerritorySourceMap research source URLs. Stage 4 falls back to model
+    recall with forced Needs Validation label. Stale catalog is worse than
+    no catalog — this gate prevents grounding hypotheses in outdated law.
+
+8.  industry and geography removed from pipeline intake.
+    The httpStart.js payload no longer uses the free-text 'industry' or
+    'geography' fields. Industry is now the cpor_IndustryCode lookup on Lead.
+    Territory is the OOB territoryid on Lead. Stage 0 reads both from Lead
+    directly. The orchestrator passes groundingContext to all stages.
+
+9.  Stage 7 runs AFTER Stage 6 (correctness fix included in Phase 9).
+    The S6||S7 parallel bug is fixed as part of the prompt/orchestrator
+    updates in Phase 9. Stage 7 now receives Stage 6's stakeholder analysis,
+    making stakeholderImpact and stakeholderUrgency wave project scores
+    analytically grounded.
+
+
+NEW ENTITIES SUMMARY
+--------------------
+Tier 1 — Taxonomy (4, all managed by Global Industry Team)
+  cpor_IndustryCode           cpor_industrycodes
+  cpor_ComplianceDomain       cpor_compliancedomains
+  territory (OOB extended)    territories          <-- 5 custom fields added
+  cpor_RegulatorySource       cpor_regulatorysources
+
+Tier 2 — Crosswalk (2, generated from CSV imports)
+  cpor_IndustryDomainMap      cpor_industrydomainmaps
+  cpor_TerritorySourceMap     cpor_territorysourcemaps
+
+Tier 3 — Resolution (1, populated by Industry Team per intersection)
+  cpor_RegulatoryRegistration cpor_regulatoryregistrations
+
+FK additions to existing entities
+  cpor_Hypothesis             + cpor_RegulatoryRegistration (nullable lookup)
+                              + cpor_ComplianceDomain (nullable lookup)
+                              + cpor_Territory → OOB territory (nullable lookup)
+  Lead                        + cpor_IndustryCode (lookup)
+  Account                     + cpor_IndustryCode (lookup)
+
+
+NEW OPTIONSETS (6)
+------------------
+  cpor_industrycloudvertical      6 values
+  cpor_territorytype              5 values
+  cpor_jurisdictionlevel          5 values
+  cpor_implementationpriority     3 values
+  cpor_riskrating                 3 values
+  cpor_legaltype                  6 values
+
+
+NEW SECURITY ROLE
+-----------------
+  CPOR Global Industry Team
+    CRUD Global on all 7 catalog entities
+    Read Global on cpor_Hypothesis, cpor_WaveProject, Lead, Opportunity, Account
+
+Updated existing role:
+  CPOR Agent Service Principal
+    Read Global added for all 7 catalog entities

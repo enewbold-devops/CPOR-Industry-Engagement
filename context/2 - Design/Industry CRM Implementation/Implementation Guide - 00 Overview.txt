@@ -1,0 +1,239 @@
+================================================================================
+CPOR DURABLE — INDUSTRY CRM IMPLEMENTATION
+Implementation Guide 00: Overview, Decisions, and Phase Map
+Date: 2026-06-15
+================================================================================
+
+PURPOSE
+-------
+Deliver the user experience layer for the Global Industry Team in the CPOR
+Dynamics 365 Sales solution. The Dataverse catalog entities created by Global
+Industry Implementation (GII) Guides 00-07 have no purpose without a governed
+Model Driven App that allows compliance analysts, industry specialists, and
+data stewards to view, create, update, and maintain those records.
+
+This guide set (Guides 00-06) specifies the complete CRM layer:
+  - A dedicated Power Apps Model Driven App for the Global Industry Team
+  - Views and forms for all 7 catalog entities
+  - A Catalog Health dashboard for operational monitoring
+  - Business Rules enforcing data quality on cpor_RegulatoryRegistration
+  - Power Automate Flows for stale-catalog alerting and Lead data sync
+
+SCOPE BOUNDARY
+--------------
+These guides cover only the Global Industry Team experience.
+
+OUT OF SCOPE:
+  - The CPOR Sales app used by sellers (Sales Team Members)
+  - Changes to the Sales Team Member security role
+  - Hypothesis Regulatory Grounding section on the Sales app (separate work item)
+  - Additional sales pipeline pipeline stages or orchestration logic
+
+Both the CRM layer and the AI pipeline layer read from the same Dataverse
+catalog. Changes made by the Industry Team in the CPOR Industry Catalog app
+are immediately available to the CPOR pipeline (subject to the 180-day
+freshness gate defined in GII Guide 00).
+
+
+PREREQUISITE: GII GUIDES 00-07 FULLY DEPLOYED
+----------------------------------------------
+All Industry CRM guides assume the following are complete and verified in the
+target Dataverse environment:
+
+  GII Guide 01  All 7 global optionsets deployed
+  GII Guide 02  cpor_IndustryCode, cpor_ComplianceDomain, territory extensions,
+                cpor_RegulatorySource deployed
+  GII Guide 03  cpor_IndustryDomainMap, cpor_TerritorySourceMap deployed
+  GII Guide 04  cpor_RegulatoryRegistration deployed
+  GII Guide 05  FK extensions on cpor_Hypothesis, Lead, Account deployed
+  GII Guide 06  CPOR Global Industry Team security role created
+                CPOR Agent Service Principal role updated
+  GII Guide 07  All CSV data imported (33 IndustryCodes, 20 ComplianceDomains,
+                34 Territories, sources, crosswalk maps)
+
+DO NOT proceed with any CRM guide if GII deployment is incomplete. The App
+Module creation in Guide 01 requires the entities; view and form creation in
+Guides 02-03 requires both entities and data to be queryable.
+
+VERIFICATION COMMAND (run before starting):
+  GET /cpor_industrycodes?$count=true&$top=0
+  GET /cpor_compliancedomains?$count=true&$top=0
+  GET /cpor_regulatoryregistrations?$count=true&$top=0
+Expected: 33, 20, and ≥1 respectively.
+
+
+LOCKED DESIGN DECISIONS
+-----------------------
+1.  DEDICATED APP MODULE.
+    The Global Industry Team gets a separate Model Driven App named
+    "CPOR Industry Catalog" (unique name: cpor_CPORIndustryCatalog).
+    This is NOT a new area added to the existing CPOR Sales app.
+    Rationale: Clean separation of personas; Industry Team members do not
+    need access to engagement records on their default screen; sales team
+    members do not see catalog admin UX.
+
+2.  SECURITY ROLE GATE.
+    Only the "CPOR Global Industry Team" role (defined in GII Guide 06)
+    is assigned as an app role for CPOR Industry Catalog. No other role
+    gives access to this app. System Administrators can access it by
+    default (Dataverse platform behavior).
+
+3.  TERRITORY VIEW FILTER.
+    CPOR-managed territory records are distinguished from existing D365 sales
+    routing territory records by the presence of a non-null cpor_territorycode
+    custom field. All territory views in this app filter on:
+      cpor_territorycode ne null
+    This prevents analysts from accidentally viewing or modifying OOB
+    sales territory records.
+
+4.  cpor_STATUS REMAINS FREE TEXT IN THIS RELEASE.
+    cpor_RegulatoryRegistration.cpor_status is currently a Text(20) field
+    accepting "Active", "Superseded", or "Pending" (per GII Guide 04).
+    Views and Business Rules in this guide set filter on these exact string
+    values. A future release should convert cpor_status to an optionset to
+    enable dropdown filtering. This is flagged in Guide 02.
+
+5.  INLINE DATE EDIT ON STALE VIEW.
+    The "Stale — Needs Reverification" view on cpor_RegulatoryRegistration
+    exposes cpor_lastverifieddate as an editable column so analysts can
+    mark records as verified without opening the full form. This is
+    implemented via the view's column configuration (Edit Columns → mark
+    cpor_lastverifieddate as editable).
+
+6.  FLOW RECIPIENT IS AN ENVIRONMENT VARIABLE.
+    Power Automate Flows (Guide 06) send notifications to the Industry Team.
+    Rather than hardcoding an email address or Teams channel, each flow
+    reads from a Dataverse Environment Variable named
+    CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET.
+    The implementing admin sets this value at deployment time.
+    See Guide 06 for variable definition steps.
+
+7.  BUSINESS RULES SCOPE: FIELD CONTROL ONLY.
+    MDA Business Rules cannot perform dynamic date calculations (e.g.
+    "today minus 180 days"). All date-threshold logic is handled by
+    Power Automate Flows (Guide 06). Business Rules in Guide 05 cover
+    only field locking and conditional required enforcement — behaviors
+    that are fully supported natively.
+
+
+PRIMARY PERSONA: GLOBAL INDUSTRY TEAM
+--------------------------------------
+The app is designed for three sub-roles within the Global Industry Team
+(all assigned the "CPOR Global Industry Team" security role):
+
+  Compliance Analyst
+    Primary job: Curate cpor_RegulatoryRegistration records. Verify active
+    regulations are current. Set cpor_lastverifieddate after review.
+    Update cpor_status when regulations are superseded. Work from the Stale
+    and Approaching Deadlines views daily.
+
+  Industry Specialist
+    Primary job: Maintain cpor_IndustryDomainMap crosswalk. Identify new
+    industry × compliance domain combinations as regulations evolve. Map
+    industry codes to Microsoft Industry Cloud verticals.
+
+  Data Steward
+    Primary job: Run periodic CSV imports from updated source files.
+    Manage cpor_TerritorySourceMap and cpor_RegulatorySource records.
+    Monitor Catalog Health Dashboard for coverage gaps.
+
+All three sub-roles use the same security role and the same app. The
+site map groups content so each persona naturally finds their primary
+work area first.
+
+
+NEW GUIDES SUMMARY
+------------------
+Guide 01  App Module and Site Map
+          Create the CPOR Industry Catalog app and configure the site map
+          with 4 navigation areas: Dashboard, Taxonomy, Crosswalk,
+          Registrations.
+
+Guide 02  Views
+          Define all views across 7 catalog entities. Specify column sets,
+          filter conditions, sort orders, and inline edit columns.
+
+Guide 03  Forms
+          Define form layouts for cpor_RegulatoryRegistration (primary),
+          cpor_IndustryDomainMap, cpor_TerritorySourceMap, and the OOB
+          territory form extension.
+
+Guide 04  Catalog Health Dashboard
+          Create an interactive 2-column MDA dashboard as the default
+          landing experience for the app.
+
+Guide 05  Business Rules
+          Define 2 Business Rules on cpor_RegulatoryRegistration for
+          field locking (Superseded records) and conditional required
+          (Mandatory → Compliance Deadline).
+
+Guide 06  Power Automate Flows
+          Define 3 flows: stale registration weekly digest, Lead
+          industrycode auto-sync, and Lead → Account industry code copy.
+
+
+PHASE MAP AND DEPENDENCIES
+--------------------------
+
+Phase 0 — Foundation (this guide)
+  GII 00-07 verified deployed  ──────────────────────────────────┐
+                                                                   │
+Phase 1 — App Structure                                           │
+  Guide 01: App Module + Site Map  ◄────────────────────────────-┘
+    (must complete before views and forms can be added to the app)
+
+Phase 2 — Entity UX  (Guide 01 is prerequisite; 02 and 03 parallel)
+  Guide 02: Views  ──────────────────────────────┐
+  Guide 03: Forms  ──────────────────────────────┤
+                                                  │
+Phase 3 — Intelligence  (Guide 02 prerequisite    │
+          for Guide 04; Guides 05-06 parallel      │
+          with Phase 2)                            │
+  Guide 04: Dashboard  ◄───────────────────────┤ (needs views from Guide 02)
+  Guide 05: Business Rules  ◄──────────────────┘ (needs entity from GII)
+  Guide 06: Power Automate Flows  ◄─────────────  (needs entity from GII)
+
+
+ENVIRONMENT VARIABLE: CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET
+-------------------------------------------------------------
+Before implementing Guide 06, create this Environment Variable in the
+CPOR solution:
+
+  Name:           CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET
+  Display Name:   CPOR Industry Team Notification Target
+  Type:           Text
+  Description:    Email address or Teams webhook URL for stale-registration
+                  digest notifications. Set to the Industry Team distribution
+                  list email or a Teams incoming webhook URL.
+  Default Value:  (leave blank — must be set by deploying admin)
+
+Portal steps:
+  In make.powerapps.com, open the CPOR solution.
+  Select Objects > Environment Variables > + New Environment Variable.
+  Complete fields as above. Save.
+
+This variable is referenced in Guide 06 Flow 1. Its value must be set
+before the flow is activated.
+
+
+VERIFICATION AFTER ALL 7 GUIDES
+--------------------------------
+After completing all guides, verify the full implementation:
+
+1. Log in as a user assigned only the "CPOR Global Industry Team" role.
+   Confirm they can access "CPOR Industry Catalog" from the app picker.
+   Confirm they CANNOT access "CPOR Sales" app.
+
+2. In the app, confirm the Catalog Health Dashboard loads as the default.
+   Confirm all 4 chart/tile types render without errors.
+
+3. Open the Regulatory Registrations area. Confirm the Active Registrations
+   view is the default. Open a record. Confirm all 6 form sections are visible.
+
+4. Navigate to Taxonomy > Industry Codes. Confirm 33 records.
+   Navigate to Taxonomy > Compliance Domains. Confirm 20 records.
+   Navigate to Taxonomy > Territories (filtered). Confirm 34 CPOR records.
+
+5. Open a Lead in the CPOR Sales app. Change the OOB industrycode field.
+   Save the Lead. Confirm the Power Automate flow triggers and
+   cpor_industrycodeid is populated within 1-2 minutes.

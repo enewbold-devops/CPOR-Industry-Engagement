@@ -1,0 +1,189 @@
+================================================================================
+CPOR DURABLE — DATAVERSE CATALOG TIER EXTENSION
+Implementation Guide 03: Crosswalk Entities
+Date: 2026-06-13
+================================================================================
+
+PURPOSE
+-------
+Create 2 crosswalk entities that map taxonomy nodes to each other. These are
+many-to-many junction entities with business attributes (not auto-generated
+N:N relationships, which lack sufficient fields).
+
+  cpor_IndustryDomainMap   — maps IndustryCode × ComplianceDomain
+  cpor_TerritorySourceMap  — maps Territory × ComplianceDomain × RegulatorySource
+
+PREREQUISITES
+-------------
+Phase 1 (optionsets) and Phase 2 (taxonomy entities) must be deployed first.
+The FKs in these entities reference cpor_IndustryCode, cpor_ComplianceDomain,
+cpor_RegulatorySource, and OOB territory.
+
+
+================================================================================
+ENTITY 3a — cpor_IndustryDomainMap
+================================================================================
+Display Name:       Industry Domain Map
+Plural Name:        Industry Domain Maps
+Entity Set Name:    cpor_industrydomainmaps
+Schema Name:        cpor_IndustryDomainMap
+Primary Field:      cpor_name (auto-generated or set to "IC-{code} × DOM-{code}")
+Description:        Associates a D365 industry code with a compliance domain,
+                    indicating that organizations in that industry are typically
+                    subject to that domain's regulatory requirements.
+                    Source data: Industry Domain Matrix.csv
+
+OWNERSHIP: User or Team
+AUDIT: Enabled
+
+FIELDS
+------
+Field Name                 Display Name               Type          Required  Notes
+-------------------------  -------------------------  ------------  --------  ----------------------------
+cpor_name                  Name                       Text (200)    Required  Primary field. Convention:
+                                                                              "Financial × Data Protection"
+cpor_industrycodeid        Industry Code              Lookup        Required  → cpor_IndustryCode
+                                                                              Relationship type: N:1
+                                                                              Cascade Delete: RemoveLink
+cpor_compliancedomainid    Compliance Domain          Lookup        Required  → cpor_ComplianceDomain
+                                                                              Relationship type: N:1
+                                                                              Cascade Delete: RemoveLink
+cpor_implementationpriority Implementation Priority  Choice        None      Options: cpor_implementationpriority
+                                                                              High/Medium/Low
+cpor_primarysourceids      Primary Source IDs         Text Area(500) None     Semi-colon separated
+                                                                              cpor_sourceid values.
+                                                                              e.g. "SRC-EDPB;SRC-SWIFT"
+                                                                              From IndustryCrosswalk.csv
+cpor_primarysourceurls     Primary Source URLs        Text Area(1000) None    Semi-colon separated URLs
+                                                                              corresponding to source IDs
+cpor_dataversemappingnote  Mapping Note               Text Area(1000) None   Analyst notes on why this
+                                                                              mapping applies. From
+                                                                              Industry Domain Matrix.csv
+
+DUPLICATE DETECTION
+-------------------
+Configure a Duplicate Detection Rule on cpor_IndustryDomainMap:
+  Rule Name: "Duplicate Industry-Domain Mapping"
+  Fields:    cpor_industrycodeid AND cpor_compliancedomainid
+  Match:     Exact match on both fields
+  Action:    Warn on create and import
+
+This prevents the same industry-domain pair from being imported twice if
+CSV data contains duplicate rows.
+
+STAGE 0 QUERY PATTERN
+---------------------
+referenceResolver.js queries this entity as:
+  GET /cpor_industrydomainmaps
+    ?$filter=_cpor_industrycodeid_value eq '{industryCodeGuid}'
+    &$expand=cpor_compliancedomainid($select=cpor_domaincode,cpor_name)
+    &$select=cpor_implementationpriority,cpor_primarysourceids
+
+Returns an array of complianceDomains[] with domain codes that Stage 3 uses
+to classify industry challenge map items and that Stage 4 uses to scope
+regulatory research.
+
+NOTE ON RELATIONSHIPS
+---------------------
+The N:1 relationships to cpor_IndustryCode and cpor_ComplianceDomain are
+created automatically by the portal when you add the lookup columns
+(cpor_industrycodeid and cpor_compliancedomainid) during table creation.
+No separate relationship configuration is required.
+
+
+================================================================================
+ENTITY 3b — cpor_TerritorySourceMap
+================================================================================
+Display Name:       Territory Source Map
+Plural Name:        Territory Source Maps
+Entity Set Name:    cpor_territorysourcemaps
+Schema Name:        cpor_TerritorySourceMap
+Primary Field:      cpor_name (convention: "{territoryCode} × {domainCode}")
+Description:        Maps a territory node to a compliance domain and the
+                    authoritative regulatory source for research in that
+                    combination. Used by Stage 0 fallback when no specific
+                    cpor_RegulatoryRegistration exists for the industry ×
+                    territory × domain intersection.
+                    Source data: Territory Source Matrix.csv
+
+OWNERSHIP: User or Team
+AUDIT: Enabled
+
+FIELDS
+------
+Field Name                Display Name         Type          Required  Notes
+------------------------  -------------------  ------------  --------  --------------------------------
+cpor_name                 Name                 Text (200)    Required  Primary. e.g. "EU × Privacy"
+cpor_territoryid          Territory            Lookup        Required  → OOB territory entity
+                                                                       (territories)
+                                                                       Cascade Delete: RemoveLink
+cpor_compliancedomainid   Compliance Domain    Lookup        Required  → cpor_ComplianceDomain
+                                                                       Cascade Delete: RemoveLink
+cpor_regulatorysourceid   Regulatory Source    Lookup        Required  → cpor_RegulatorySource
+                                                                       Cascade Delete: RemoveLink
+cpor_usagenote            Usage Note           Text Area(500) None     Context for when to use this
+                                                                       source. e.g. "Use for EU member
+                                                                       state privacy inquiries when no
+                                                                       national registration exists."
+
+STAGE 0 QUERY PATTERN
+---------------------
+referenceResolver.js uses this for the researchSources[] fallback:
+
+  // Collect all territory GUIDs in the jurisdiction chain
+  const territoryIds = jurisdictionChain.map(t => t.territoryid);
+
+  // Find domains not covered by candidateRegulations
+  const coveredDomains = new Set(candidateRegulations.map(r => r.domainCode));
+  const uncoveredDomains = complianceDomains.filter(d => !coveredDomains.has(d.domainCode));
+
+  // For each uncovered domain, find the most-specific research source
+  for (const domain of uncoveredDomains) {
+    GET /cpor_territorysourcemaps
+      ?$filter=_cpor_compliancedomainid_value eq '{domain.guid}'
+              and _cpor_territoryid_value in ({territoryIds as filter})
+      &$expand=cpor_regulatorysourceid($select=cpor_name,cpor_url,cpor_sourceid)
+               cpor_territoryid($select=cpor_jurisdictionlevel,cpor_territorycode)
+      &$orderby=cpor_territoryid/cpor_jurisdictionlevel desc
+      &$top=1
+  }
+
+The most specific match (highest jurisdiction level integer = most specific)
+is returned as the research source for that domain.
+
+NOTE ON RELATIONSHIPS
+---------------------
+The N:1 relationships to territory, cpor_ComplianceDomain, and
+cpor_RegulatorySource are created automatically by the portal when you
+add the lookup columns (cpor_territoryid, cpor_compliancedomainid,
+cpor_regulatorysourceid) during table creation.
+No separate relationship configuration is required.
+
+================================================================================
+VERIFICATION
+================================================================================
+
+After Phase 7 data import, run these FetchXML queries via Advanced Find:
+
+1. Verify Industry-Domain crosswalk coverage:
+   Find all IndustryDomainMap records where Industry Code = "Financial" (code 16)
+   Expected: ~8-12 domain mappings including PRIV, FIN, COMP, TRADE, CYBER, TAX
+
+2. Verify Territory-Source fallback exists:
+   Find TerritorySourceMap where Territory Code = 'EMEA-EU' AND Domain Code = 'PRIV'
+   Expected: 1 record pointing to SRC-EDPB (European Data Protection Board)
+
+3. Verify no orphaned crosswalk records (missing FKs):
+   FetchXML:
+   <fetch>
+     <entity name="cpor_industrydomainmap">
+       <filter>
+         <condition attribute="cpor_industrycodeid" operator="null" />
+       </filter>
+     </entity>
+   </fetch>
+   Expected: 0 records
+
+================================================================================
+END OF GUIDE 03
+================================================================================

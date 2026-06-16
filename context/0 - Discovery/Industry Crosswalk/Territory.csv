@@ -1,0 +1,34 @@
+TerritoryCode,TerritoryName,ParentTerritory,TerritoryType,Basis/Notes,TerritorySourceURL
+GLOBAL,Global,,Global,Worldwide,https://unstats.un.org/unsd/methodology/m49/
+NAM,North America,GLOBAL,Region,UN M49 Americas / Northern America,https://unstats.un.org/unsd/methodology/m49/
+NAM-US,United States,NAM,Country,United States,https://unstats.un.org/unsd/methodology/m49/
+NAM-CA,Canada,NAM,Country,Canada,https://unstats.un.org/unsd/methodology/m49/
+NAM-MX,Mexico,NAM,Country,Mexico,https://unstats.un.org/unsd/methodology/m49/
+LATAM,Latin America & Caribbean,GLOBAL,Region,UN M49 Latin America and Caribbean,https://unstats.un.org/unsd/methodology/m49/
+LATAM-CAM,Central America,LATAM,Subregion,Central America,https://unstats.un.org/unsd/methodology/m49/
+LATAM-CAR,Caribbean,LATAM,Subregion,Caribbean,https://unstats.un.org/unsd/methodology/m49/
+LATAM-SAM,South America,LATAM,Subregion,South America,https://unstats.un.org/unsd/methodology/m49/
+EMEA,Europe Middle East & Africa,GLOBAL,Region,"Common commercial territory; combine UN M49 Europe, Africa, Western Asia",https://unstats.un.org/unsd/methodology/m49/
+EMEA-EUR,Europe,EMEA,Region,UN M49 Europe,https://unstats.un.org/unsd/methodology/m49/
+EMEA-EU,European Union,EMEA-EUR,Supranational,EU legal and regulatory system,https://unstats.un.org/unsd/methodology/m49/
+EMEA-NEUR,Northern Europe,EMEA-EUR,Subregion,Northern Europe,https://unstats.un.org/unsd/methodology/m49/
+EMEA-WEUR,Western Europe,EMEA-EUR,Subregion,Western Europe,https://unstats.un.org/unsd/methodology/m49/
+EMEA-SEUR,Southern Europe,EMEA-EUR,Subregion,Southern Europe,https://unstats.un.org/unsd/methodology/m49/
+EMEA-EEUR,Eastern Europe,EMEA-EUR,Subregion,Eastern Europe,https://unstats.un.org/unsd/methodology/m49/
+EMEA-MEA,Middle East & Africa,EMEA,Region,Commercial region,https://unstats.un.org/unsd/methodology/m49/
+EMEA-ME,Middle East / Western Asia,EMEA-MEA,Subregion,Western Asia / Middle East,https://unstats.un.org/unsd/methodology/m49/
+EMEA-NAF,Northern Africa,EMEA-MEA,Subregion,Northern Africa,https://unstats.un.org/unsd/methodology/m49/
+EMEA-WAF,Western Africa,EMEA-MEA,Subregion,Western Africa,https://unstats.un.org/unsd/methodology/m49/
+EMEA-EAF,Eastern Africa,EMEA-MEA,Subregion,Eastern Africa,https://unstats.un.org/unsd/methodology/m49/
+EMEA-CAF,Central / Middle Africa,EMEA-MEA,Subregion,Middle Africa,https://unstats.un.org/unsd/methodology/m49/
+EMEA-SAF,Southern Africa,EMEA-MEA,Subregion,Southern Africa,https://unstats.un.org/unsd/methodology/m49/
+APAC,Asia Pacific,GLOBAL,Region,Common commercial territory; Asia + Oceania,https://unstats.un.org/unsd/methodology/m49/
+APAC-EAS,Eastern Asia,APAC,Subregion,Eastern Asia,https://unstats.un.org/unsd/methodology/m49/
+APAC-SEA,Southeast Asia,APAC,Subregion,South-eastern Asia,https://unstats.un.org/unsd/methodology/m49/
+APAC-SAS,Southern Asia,APAC,Subregion,Southern Asia,https://unstats.un.org/unsd/methodology/m49/
+APAC-CAS,Central Asia,APAC,Subregion,Central Asia,https://unstats.un.org/unsd/methodology/m49/
+APAC-OCE,Oceania,APAC,Region,UN M49 Oceania,https://unstats.un.org/unsd/methodology/m49/
+APAC-ANZ,Australia & New Zealand,APAC-OCE,Subregion,Australia and New Zealand,https://unstats.un.org/unsd/methodology/m49/
+APAC-MEL,Melanesia,APAC-OCE,Subregion,Melanesia,https://unstats.un.org/unsd/methodology/m49/
+APAC-MIC,Micronesia,APAC-OCE,Subregion,Micronesia,https://unstats.un.org/unsd/methodology/m49/
+APAC-POL,Polynesia,APAC-OCE,Subregion,Polynesia,https://unstats.un.org/unsd/methodology/m49/

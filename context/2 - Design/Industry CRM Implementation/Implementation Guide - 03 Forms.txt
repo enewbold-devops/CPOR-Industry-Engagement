@@ -1,0 +1,344 @@
+================================================================================
+CPOR DURABLE — INDUSTRY CRM IMPLEMENTATION
+Implementation Guide 03: Forms
+Date: 2026-06-15
+================================================================================
+
+PURPOSE
+-------
+Define the main form layouts for all catalog entities used by the Global
+Industry Team. Forms control what analysts see and edit when they open a
+record. Well-structured forms reduce error, enforce workflow discipline,
+and surface compliance context clearly.
+
+This guide specifies:
+  - cpor_RegulatoryRegistration Main Form (primary — most detailed)
+  - cpor_IndustryDomainMap Main Form
+  - cpor_TerritorySourceMap Main Form
+  - territory Main Form extension (CPOR fields section added to OOB form)
+  - cpor_RegulatorySource, cpor_IndustryCode, cpor_ComplianceDomain
+    (minor form additions — brief field configuration notes)
+
+PREREQUISITE: Guide 01 (App Module) complete. GII Guides 00-07 deployed.
+
+PORTAL STEPS (applies to all forms)
+-------------------------------------
+1. In make.powerapps.com, open the CPOR solution.
+2. Select Objects > Tables, then select the target table.
+3. Select Forms from the table's components list.
+4. Open the existing "Information" Main form (every table has one by default).
+5. Use the form editor to add sections, tabs, and fields as specified.
+6. Select Save, then Publish.
+
+NOTE: Always edit the existing Main form rather than creating a new one,
+unless the existing form is locked (managed solution). Creating a duplicate
+form requires configuring it as the default in the app, which adds steps.
+
+
+================================================================================
+FORM 1: cpor_RegulatoryRegistration — Main Form
+================================================================================
+
+FORM NAME: Information (existing default — edit in place)
+HEADER FIELDS (always visible, top of form):
+  cpor_name          (primary field — legislation short name)
+  cpor_status        (Active / Superseded / Pending — quick-scan field)
+
+TAB STRUCTURE: Single tab (no tab bar needed — all sections in one scroll)
+
+SECTION 1: Taxonomy Anchors
+---------------------------
+Purpose: The "who does this apply to" trinity. Required FKs that anchor
+         every regulation to a specific industry, territory, and domain.
+         Analysts must set all three before the record is useful to the pipeline.
+
+Layout: 2-column
+
+  Left column                       Right column
+  --------------------------------  --------------------------------
+  Industry Code *                   Territory *
+  (cpor_industrycodeid)             (cpor_territoryid)
+  Compliance Domain *               Regulatory Source
+  (cpor_compliancedomainid)         (cpor_regulatorysourceid)
+
+Field labels use the display names from GII Guide 04.
+Fields marked * are required (RequiredLevel = Required per GII Guide 04).
+
+SECTION NOTE: Add a section description (visible to analyst in form):
+  "Required: Set all three taxonomy anchors before saving. Industry Code and
+  Territory are read by the pipeline at Stage 0. Compliance Domain drives
+  hypothesis classification at Stage 4."
+
+
+SECTION 2: Regulator Identity
+------------------------------
+Purpose: Identifies who issues or oversees this regulation. Provides
+         context for executive conversations and compliance research.
+
+Layout: 2-column
+
+  Left column                       Right column
+  --------------------------------  --------------------------------
+  Regulator / Body Name             Regulator Type
+  (cpor_regulatorbodyname)          (cpor_regulatortype)
+  Regulator Website URL
+  (cpor_regulatorwebsiteurl)
+
+
+SECTION 3: Legislation Details
+--------------------------------
+Purpose: The specific law or standard. Most important for analyst curation
+         quality — this is what appears in seller-facing hypothesis grounding.
+
+Layout: 2-column header + full-width fields below
+
+  Row 1 (2-column):
+  Left: Legal Type (cpor_legaltype)     Right: (empty — visual balance)
+
+  Row 2 (full-width, 1-column):
+  Legislation Name (cpor_legislationname)       [full width]
+  Legislation URL (cpor_legislationurl)         [full width]
+  Applicability Rule (cpor_applicabilityrule)   [full width, multiline, 4 rows]
+
+SECTION NOTE: "Applicability Rule should be plain-language. Example: 'Applies
+when the organization processes personal data of EU residents, regardless of
+where the organization is located.'"
+
+
+SECTION 4: Risk and Status
+---------------------------
+Purpose: Operational status and risk severity. Risk Rating feeds the
+         pipeline's regulatoryExposure score in Stage 7.
+
+Layout: 2-column
+
+  Left column                       Right column
+  --------------------------------  --------------------------------
+  Risk Rating                       Mandatory
+  (cpor_riskrating)                 (cpor_mandatory)
+  Status                            (empty)
+  (cpor_status)
+
+FIELD NOTE — cpor_status: This is currently a free-text field. Add a field
+description (in the form field properties > Description) that reads:
+  "Valid values: Active, Superseded, Pending. Spell exactly as shown.
+  Future release will convert this to a dropdown."
+This guides analysts until the optionset conversion is complete.
+
+
+SECTION 5: Compliance Dates
+-----------------------------
+Purpose: Critical for freshness management and deadline alerting.
+         cpor_lastverifieddate is the primary operational field —
+         it controls whether the pipeline uses this record (180-day gate).
+
+Layout: 2-column, with cpor_lastverifieddate visually emphasized
+
+  Left column                       Right column
+  --------------------------------  --------------------------------
+  Effective Date                    Compliance Deadline
+  (cpor_effectivedate)              (cpor_compliancedeadline)
+  Last Verified Date  ← HIGHLIGHT   Next Significant Date
+  (cpor_lastverifieddate)           (cpor_nextsignificantdate)
+
+HIGHLIGHT cpor_lastverifieddate:
+  In the field properties within the form editor, set the field label font
+  to Bold. This draws analyst attention to the most operationally important
+  field on the form.
+  Add a field description: "Set this date every time you confirm this record
+  is still current. Records not verified within 180 days are excluded from
+  pipeline grounding."
+
+SECTION NOTE: "Compliance Deadline: Leave blank if the regulation is already
+in force with no upcoming deadline. Set only if there is a specific date
+by which organizations must comply."
+
+
+SECTION 6: Analyst Notes
+--------------------------
+Purpose: Freeform scratchpad for analyst context, change history notes,
+         research links not covered by other fields, and flags for follow-up.
+         This section remains editable when a record is Superseded (Business
+         Rule in Guide 05 locks all other sections for Superseded records).
+
+Layout: 1-column, full width
+
+  Analyst Notes (cpor_analystnotes — add this field if not yet in GII)
+
+NOTE ON cpor_analystnotes: This field was not defined in GII Guide 04.
+Add it as a new Text Area (2000 chars) field to cpor_RegulatoryRegistration
+before configuring this form section:
+  Table: cpor_RegulatoryRegistration
+  Field Name: cpor_analystnotes
+  Display Name: Analyst Notes
+  Type: Text Area (2000)
+  Required: None
+
+FORM FOOTER
+-----------
+No custom footer fields needed. The OOB audit fields (Created By, Modified By,
+Modified On) are visible in the standard form footer.
+
+FORM COMMAND BAR: No custom command bar changes required for this release.
+
+
+================================================================================
+FORM 2: cpor_IndustryDomainMap — Main Form
+================================================================================
+
+FORM NAME: Information (existing default — edit in place)
+HEADER FIELDS: cpor_name
+
+SECTION 1: Mapping Definition (2-column)
+  Left: Industry Code * (cpor_industrycodeid)
+  Right: Compliance Domain * (cpor_compliancedomainid)
+  Left: Implementation Priority (cpor_implementationpriority)
+  Right: (empty)
+
+SECTION 2: Source References (1-column, full width)
+  Primary Source IDs (cpor_primarysourceids)     [full width, text area]
+  Primary Source URLs (cpor_primarysourceurls)   [full width, text area]
+  Mapping Note (cpor_dataversemappingnote)        [full width, text area, 4 rows]
+
+SECTION NOTE: "Source IDs and URLs are semi-colon separated. Example:
+  Source IDs: SRC-EDPB;SRC-GPA
+  Source URLs: https://www.edpb.europa.eu/ | https://globalprivacyassembly.com/"
+
+FORM COMMAND BAR: No changes.
+
+
+================================================================================
+FORM 3: cpor_TerritorySourceMap — Main Form
+================================================================================
+
+FORM NAME: Information (existing default — edit in place)
+HEADER FIELDS: cpor_name
+
+SECTION 1: Mapping Definition (2-column)
+  Left: Territory * (cpor_territoryid)
+  Right: Compliance Domain * (cpor_compliancedomainid)
+  Left: Regulatory Source * (cpor_regulatorysourceid)
+  Right: (empty)
+
+SECTION 2: Usage Context (1-column, full width)
+  Usage Note (cpor_usagenote)   [full width, text area, 3 rows]
+
+SECTION NOTE: "Usage Note: Describe when to use this source for this
+territory × domain combination. Example: 'Use for EU member state privacy
+inquiries when no specific national registration exists in cpor_RegulatoryRegistration.'"
+
+FORM COMMAND BAR: No changes.
+
+
+================================================================================
+FORM 4: territory (OOB) — CPOR Extensions Section
+================================================================================
+
+PURPOSE: Add a dedicated CPOR section to the OOB territory Main form so
+         analysts can edit the 5 custom fields without leaving the form.
+         The rest of the OOB territory form is left unchanged.
+
+PORTAL STEPS:
+1. Navigate to Objects > Tables > Territory.
+2. Select Forms > open the "Territory" Main form.
+3. Scroll to the bottom of the form (after the existing OOB sections).
+4. Add a new Section named "CPOR Catalog Properties".
+5. Add the 5 custom fields to this section.
+
+SECTION: CPOR Catalog Properties (2-column)
+  Left: Territory Code (cpor_territorycode)
+  Right: Territory Type (cpor_territorytype)
+  Left: Jurisdiction Level (cpor_jurisdictionlevel)
+  Right: ISO Country Code (cpor_isocountrycode)
+  Left: Source URL (cpor_sourceurl)
+  Right: (empty)
+
+SECTION NOTE: "CPOR fields. Territory Code is the alternate key used in
+pipeline grounding (e.g. 'EMEA-EU'). Do not change Territory Code after
+initial import — it is used as a stable reference in orchestrator queries."
+
+IMPORTANT: Only add the CPOR Catalog Properties section. Do NOT modify
+any existing sections of the OOB territory form. OOB territory fields
+(name, parentterritoryid, managerid, etc.) remain in their existing positions.
+
+Publish the territory form after saving.
+
+
+================================================================================
+FORM 5: cpor_RegulatorySource — Main Form
+================================================================================
+
+SECTION 1: Source Identity (2-column)
+  Left: Source ID (cpor_sourceid) *
+  Right: Source URL (cpor_url)
+  Full width: Name (cpor_name) *
+  Full width: Description (cpor_description)
+
+No additional sections needed for this reference entity.
+
+
+================================================================================
+FORM 6: cpor_IndustryCode — Main Form
+================================================================================
+
+SECTION 1: Classification (2-column)
+  Left: D365 Industry Code (cpor_d365industrycode) *
+  Right: Industry Cloud Vertical (cpor_industrycloudvertical)
+  Full width: Name (cpor_name) *
+  Full width: Source URL (cpor_sourceurl)
+
+No additional sections needed for this reference entity.
+
+
+================================================================================
+FORM 7: cpor_ComplianceDomain — Main Form
+================================================================================
+
+SECTION 1: Domain Definition (2-column)
+  Left: Domain Code (cpor_domaincode) *
+  Right: (empty)
+  Full width: Name (cpor_name) *
+  Full width: Common Regulator Body Types (cpor_commonregulatorbodytypes)
+  Full width: Typical Coverage (cpor_typicalcoverage)
+
+No additional sections needed for this reference entity.
+
+
+================================================================================
+VERIFICATION
+================================================================================
+
+FORM STRUCTURE CHECK — cpor_RegulatoryRegistration
+1. Open any Active registration record.
+   Confirm 6 sections are visible: Taxonomy Anchors, Regulator Identity,
+   Legislation Details, Risk and Status, Compliance Dates, Analyst Notes.
+2. Confirm Industry Code, Territory, and Compliance Domain fields show
+   the record name (expanded lookup) rather than a GUID.
+3. Confirm cpor_lastverifieddate label appears bold.
+4. Confirm cpor_applicabilityrule shows as a multiline text area (not a
+   single-line input).
+
+BUSINESS RULE INTERACTION CHECK (preview — Business Rules are defined in Guide 05):
+5. Change cpor_status to "Superseded" (type in the field).
+   Confirm (after Guide 05 is deployed) that Risk Rating, Legislation Details,
+   and other non-Analyst-Notes fields become read-only.
+
+TERRITORY FORM CHECK
+6. Open a CPOR territory record.
+   Confirm the "CPOR Catalog Properties" section is visible at the bottom.
+   Confirm cpor_territorycode is populated (e.g. "EMEA-EU").
+   Confirm the OOB name and parentterritoryid fields above remain unchanged.
+
+NEW FIELD CHECK — cpor_analystnotes
+7. Open a registration record.
+   Confirm the Analyst Notes section is visible and the text area is editable.
+   Confirm the field accepts multi-line input.
+
+ODATA VERIFICATION — Form field availability:
+  GET /cpor_regulatoryregistrations
+    ?$select=cpor_name,cpor_status,cpor_riskrating,cpor_lastverifieddate,
+             cpor_mandatory,cpor_legaltype,cpor_analystnotes
+    &$top=1
+  Expected: all named fields return values (or null) without OData errors.
+  An OData error on cpor_analystnotes means the field was not yet added to
+  the table — return to the new field creation step above.

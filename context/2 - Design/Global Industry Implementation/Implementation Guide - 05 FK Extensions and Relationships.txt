@@ -1,0 +1,181 @@
+================================================================================
+CPOR DURABLE — DATAVERSE CATALOG TIER EXTENSION
+Implementation Guide 05: FK Extensions and Relationships
+Date: 2026-06-13
+================================================================================
+
+PURPOSE
+-------
+Extend 4 existing entities with new lookup fields that connect the engagement
+layer (cpor_Hypothesis, Lead, Account) to the catalog tier. These are additive
+changes — no existing fields are modified or removed.
+
+PREREQUISITES
+-------------
+Phases 1-4 must be deployed. The referenced entities must exist before lookup
+fields can be created pointing to them.
+
+
+================================================================================
+EXTENSION 5a — cpor_Hypothesis (ADD 3 NULLABLE LOOKUP FIELDS)
+================================================================================
+These 3 fields are populated by the pipeline's dataverseWriter.js when Stage 4/5
+has matched a hypothesis to a specific regulatory registration. All are nullable
+(no required level). Cascade delete is RemoveLink on all three.
+
+FIELDS TO ADD
+-------------
+Field Name                          Display Name         Type    Required  Notes
+----------------------------------  -------------------  ------  --------  -------------------------
+cpor_regulatoryregistrationid       Regulatory           Lookup  None      → cpor_RegulatoryRegistration
+                                    Registration                           Stage 0 returns GUIDs;
+                                                                           dataverseWriter binds by GUID.
+cpor_compliancedomainid_hypothesis  Compliance Domain    Lookup  None      → cpor_ComplianceDomain
+                                                                           Alternate key bind:
+                                                                           cpor_compliancedomains(
+                                                                             cpor_domaincode='PRIV')
+                                                                           Schema name:
+                                                                           cpor_ComplianceDomainId
+                                                                           (NOTE: check for name
+                                                                           collision if ComplianceDomain
+                                                                           already has a relationship
+                                                                           on a different entity; use
+                                                                           cpor_hypothesiscompliancedomain
+                                                                           as relationship name)
+cpor_territoryid_hypothesis         Territory            Lookup  None      → OOB territory entity
+                                                                           Alternate key bind:
+                                                                           territories(
+                                                                             cpor_territorycode='EMEA-EU')
+                                                                           Schema name: cpor_TerritoryId
+                                                                           (same caution re: collisions)
+
+FIELD DISPLAY NAMES AND FORM PLACEMENT
+----------------------------------------
+Add all three to the cpor_Hypothesis Main form in a new section named
+"Regulatory Grounding" placed below the existing Hypothesis Details section.
+This provides auditability for Sales Team Members reviewing hypotheses.
+
+NOTE ON RELATIONSHIPS
+---------------------
+The N:1 relationships to cpor_RegulatoryRegistration, cpor_ComplianceDomain, and
+territory are created automatically by the portal when you add the lookup columns
+above. No separate relationship configuration is required.
+
+
+================================================================================
+EXTENSION 5b — Lead (ADD 1 NULLABLE LOOKUP FIELD)
+================================================================================
+The Lead form already has the OOB territoryid field. The pipeline reads
+_territoryid_value from the Lead to anchor Stage 0's jurisdiction chain.
+
+Add one additional field to connect Lead to the Industry Code catalog entity:
+
+FIELD TO ADD
+------------
+Field Name              Display Name     Type    Required  Notes
+----------------------  ---------------  ------  --------  -------------------------
+cpor_industrycodeid     Industry Code    Lookup  None      → cpor_IndustryCode
+                                                           Stage 0 reads this to get
+                                                           the d365 industry integer
+                                                           and cloud vertical. Sellers
+                                                           set this during qualification.
+
+FORM PLACEMENT
+--------------
+Add to the Lead Main form alongside the existing industrycode system field.
+Label: "Industry Code (Catalog)" to distinguish from the OOB industrycode
+picklist field that sellers already use.
+
+Sellers may set either:
+  - OOB industrycode: standard D365 picklist (1-33)
+  - cpor_industrycodeid: FK to cpor_IndustryCode catalog
+
+Stage 0 referenceResolver.js reads cpor_industrycodeid first.
+If null, it falls back to industrycode (OOB integer) and resolves via
+alternate key: cpor_industrycodes(cpor_d365industrycode={industrycode})
+
+NOTE ON FALLBACK: This means Stage 0 works even before sellers adopt the
+new cpor_industrycodeid field. Backward compatibility is maintained.
+
+NOTE ON RELATIONSHIP
+--------------------
+The N:1 relationship to cpor_IndustryCode is created automatically by the
+portal when you add the cpor_industrycodeid lookup column above.
+
+
+================================================================================
+EXTENSION 5c — Account (ADD 1 NULLABLE LOOKUP FIELD)
+================================================================================
+When a Lead is qualified to an Account+Opportunity (via qualifyLead), the
+Account should also carry the industry code FK for portfolio reporting.
+
+FIELD TO ADD
+------------
+Field Name              Display Name     Type    Required  Notes
+----------------------  ---------------  ------  --------  -------------------------
+cpor_industrycodeid     Industry Code    Lookup  None      → cpor_IndustryCode
+                                                           Same FK as Lead extension.
+                                                           Should be copied from Lead
+                                                           during qualification.
+
+NOTE: Automatic copy from Lead → Account during qualifyLead is NOT handled by
+the pipeline. A Power Automate flow should be used for this. Document this as
+a follow-on item for Phase 2 operational work.
+
+NOTE ON RELATIONSHIP
+--------------------
+The N:1 relationship to cpor_IndustryCode is created automatically by the
+portal when you add the cpor_industrycodeid lookup column above.
+
+
+================================================================================
+SUMMARY OF ALL NEW LOOKUP FIELDS
+================================================================================
+
+Entity                   Field Name                         Points To
+-----------------------  ---------------------------------  ---------------------------
+cpor_Hypothesis          cpor_regulatoryregistrationid      cpor_RegulatoryRegistration
+cpor_Hypothesis          cpor_compliancedomainid            cpor_ComplianceDomain
+cpor_Hypothesis          cpor_territoryid                   territory (OOB)
+lead                     cpor_industrycodeid                cpor_IndustryCode
+account                  cpor_industrycodeid                cpor_IndustryCode
+
+5 total new lookup fields across 3 entities.
+All are nullable (RequiredLevel=none).
+All use CascadeDelete=RemoveLink.
+
+
+================================================================================
+VERIFICATION
+================================================================================
+
+After deployment, verify in the Maker Portal:
+
+1. Open cpor_Hypothesis table → Relationships
+   Should show 3 new ManyToOne relationships to:
+   cpor_RegulatoryRegistration, cpor_ComplianceDomain, territory
+
+2. Open Lead table → Relationships
+   Should show 1 new ManyToOne to cpor_IndustryCode
+
+3. Open Account table → Relationships
+   Should show 1 new ManyToOne to cpor_IndustryCode
+
+4. Open cpor_Hypothesis Main form
+   Should show "Regulatory Grounding" section with 3 lookup fields visible
+
+5. Test @odata.bind via Postman or DevTools:
+   PATCH /cpor_hypotheses({guid})
+   {
+     "cpor_regulatoryregistration@odata.bind":
+       "/cpor_regulatoryregistrations({seed-record-guid})",
+     "cpor_compliancedomain@odata.bind":
+       "/cpor_compliancedomains(cpor_domaincode='PRIV')",
+     "cpor_territory@odata.bind":
+       "/territories(cpor_territorycode='EMEA-EU')"
+   }
+   Expected: 204 No Content. GET the record to confirm all 3 FKs are populated.
+
+================================================================================
+END OF GUIDE 05
+================================================================================
