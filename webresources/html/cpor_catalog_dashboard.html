@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>CPOR Catalog Health</title>
+  <!-- Office UI Fabric Core — Segoe UI font stack + icon font -->
+  <link rel="stylesheet"
+    href="https://static2.sharepointonline.com/files/fabric/office-ui-fabric-core/11.0.0/css/fabric.min.css">
+  <!-- CPOR Fluent 2 styles -->
+  <link rel="stylesheet" href="../css/cpor_styles.css">
+</head>
+<body>
+<div id="cpor-app">
+
+  <!-- ── App Header ───────────────────────────────────────── -->
+  <header id="cpor-header" class="cpor-header"></header>
+
+  <!-- ── Main Content ─────────────────────────────────────── -->
+  <main id="cpor-main">
+
+    <div class="cpor-page-header">
+      <h1>Catalog Health</h1>
+      <p>Industry regulation catalog operational overview — live from Dataverse.</p>
+    </div>
+
+    <!-- KPI metric cards -->
+    <div class="cpor-kpi-row" id="kpi-row"></div>
+
+    <!-- Active registrations by vertical bar chart -->
+    <div class="cpor-panel cpor-chart-panel" style="margin-bottom:var(--sp-5)">
+      <div class="cpor-panel__header">
+        <span class="cpor-panel__title">Active Registrations by Industry Cloud Vertical</span>
+        <span style="font-size:var(--fs-sm);color:var(--clr-fg-2);margin-left:auto">
+          Click a bar to filter registrations
+        </span>
+      </div>
+      <div id="chart-panel-body">
+        <div class="cpor-chart-canvas-wrap">
+          <canvas id="vertical-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Two-column action list row -->
+    <div class="cpor-dash-row">
+
+      <!-- Stale Queue -->
+      <div class="cpor-panel">
+        <div class="cpor-panel__header">
+          <span class="cpor-panel__title">⏰&nbsp; Stale — Needs Reverification</span>
+          <span class="cpor-panel__count-badge" id="stale-count-badge">—</span>
+          <a href="../html/cpor_registration_manager.html?filter=stale"
+             class="cpor-btn cpor-btn--subtle cpor-btn--sm" style="margin-left:auto">View all →</a>
+        </div>
+        <div class="cpor-panel__body cpor-panel__body--no-pad" id="stale-list-body"></div>
+      </div>
+
+      <!-- Approaching Deadlines -->
+      <div class="cpor-panel">
+        <div class="cpor-panel__header">
+          <span class="cpor-panel__title">📅&nbsp; Approaching Compliance Deadlines</span>
+          <span class="cpor-panel__count-badge" id="deadline-count-badge">—</span>
+          <a href="../html/cpor_registration_manager.html?filter=deadline"
+             class="cpor-btn cpor-btn--subtle cpor-btn--sm" style="margin-left:auto">View all →</a>
+        </div>
+        <div class="cpor-panel__body cpor-panel__body--no-pad" id="deadline-list-body"></div>
+      </div>
+
+    </div><!-- /dash-row -->
+  </main>
+</div>
+
+<!-- Chart.js 4 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<!-- CPOR modules -->
+<script src="../js/cpor_xrm_client.js"></script>
+<script src="../js/cpor_components.js"></script>
+<script src="../js/cpor_dashboard.js"></script>
+</body>
+</html>

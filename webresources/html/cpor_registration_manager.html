@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>CPOR Regulatory Registrations</title>
+  <link rel="stylesheet"
+    href="https://static2.sharepointonline.com/files/fabric/office-ui-fabric-core/11.0.0/css/fabric.min.css">
+  <link rel="stylesheet" href="../css/cpor_styles.css">
+</head>
+<body>
+<div id="cpor-app">
+
+  <!-- ── App Header ───────────────────────────────────────── -->
+  <header id="cpor-header" class="cpor-header"></header>
+
+  <!-- ── Main Content ─────────────────────────────────────── -->
+  <main id="cpor-main" style="padding:0;overflow:hidden;display:flex;flex-direction:column;height:calc(100vh - 48px)">
+
+    <!-- Filter bar -->
+    <div id="filter-bar-container"></div>
+
+    <!-- Selection banner (hidden until rows selected) -->
+    <div class="cpor-selection-bar" id="selection-bar">
+      <span class="cpor-selection-bar__count" id="selection-count">0 selected</span>
+      <button class="cpor-btn cpor-btn--primary cpor-btn--sm" id="bulk-verify-btn">
+        ✔ Mark as Verified Today
+      </button>
+      <button class="cpor-btn cpor-btn--subtle cpor-btn--sm" id="clear-selection-btn">
+        Clear selection
+      </button>
+    </div>
+
+    <!-- Command bar (New, Refresh, Export + record count) -->
+    <div id="command-bar-container"></div>
+
+    <!-- Active filter pills (pre-applied from URL) -->
+    <div id="active-filter-pills" style="display:none;padding:var(--sp-2) var(--sp-5);
+         background:var(--clr-brand-bg);border-bottom:1px solid var(--clr-brand-light);
+         font-size:var(--fs-sm);color:var(--clr-brand);display:flex;align-items:center;gap:var(--sp-3)">
+      <span id="active-filter-label"></span>
+      <button class="cpor-filter-clear" id="clear-url-filter">× Clear</button>
+    </div>
+
+    <!-- Data table -->
+    <div id="table-container"
+         style="flex:1;overflow-y:auto;background:var(--clr-bg-1)"></div>
+
+    <!-- Pagination -->
+    <div id="pagination-container" style="flex-shrink:0;border-top:1px solid var(--clr-stroke-2)"></div>
+
+  </main>
+</div>
+
+<script src="../js/cpor_xrm_client.js"></script>
+<script src="../js/cpor_components.js"></script>
+<script src="../js/cpor_registration_manager.js"></script>
+</body>
+</html>

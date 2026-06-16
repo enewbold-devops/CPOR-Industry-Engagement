@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" role="img" aria-label="CPOR Industry Catalog">
+  <!-- Outer card -->
+  <rect x="2" y="3" width="20" height="18" rx="2" stroke="#0f6cbd" stroke-width="1.5" fill="#f5f9fd"/>
+  <!-- Column bars (catalog chart) -->
+  <rect x="5"  y="13" width="3" height="5" rx="1" fill="#0f6cbd"/>
+  <rect x="10" y="10" width="3" height="8" rx="1" fill="#107c10"/>
+  <rect x="15" y="7"  width="3" height="11" rx="1" fill="#8764b8"/>
+  <!-- Top accent line -->
+  <rect x="2" y="3" width="20" height="3" rx="2" fill="#0f6cbd"/>
+  <!-- Header dots -->
+  <circle cx="5"  cy="4.5" r="0.8" fill="white"/>
+  <circle cx="7.5" cy="4.5" r="0.8" fill="white"/>
+  <circle cx="10"  cy="4.5" r="0.8" fill="white"/>
+</svg>

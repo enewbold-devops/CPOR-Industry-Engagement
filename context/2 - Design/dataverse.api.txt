@@ -1,0 +1,24 @@
+
+
+
+Compliance Domain	
+    https://enewbold-sandbox.crm.dynamics.com/api/data/v9.2/EntityDefinitions(LogicalName='cpor_compliancedomain')?$expand=Attributes
+Industry Code	
+    https://enewbold-sandbox.crm.dynamics.com/api/data/v9.2/EntityDefinitions(LogicalName='cpor_industrycode')?$expand=Attributes
+Industry Domain Map	
+    https://enewbold-sandbox.crm.dynamics.com/api/data/v9.2/EntityDefinitions(LogicalName='cpor_industrydomainmap')?$expand=Attributes
+Regulatory Registration	
+    https://enewbold-sandbox.crm.dynamics.com/api/data/v9.2/EntityDefinitions(LogicalName='cpor_regulatoryregistration')?$expand=Attributes
+Regulatory Source	
+    https://enewbold-sandbox.crm.dynamics.com/api/data/v9.2/EntityDefinitions(LogicalName='cpor_regulatorysource')?$expand=Attributes
+Territory Source Map	
+    https://enewbold-sandbox.crm.dynamics.com/api/data/v9.2/EntityDefinitions(LogicalName='cpor_territorysourcemap')?$expand=Attributes
+Territory (CPOR-extended)	
+    https://enewbold-sandbox.crm.dynamics.com/api/data/v9.2/EntityDefinitions(LogicalName='territory')?$expand=Attributes
+
+
+
+
+# All relationships for a table
+GET https://enewbold-sandbox.crm.dynamics.com/api/data/v9.2/api/data/v9.2/EntityDefinitions(LogicalName='cpor_regulatoryregistration')
+    ?$expand=ManyToOneRelationships,OneToManyRelationships
