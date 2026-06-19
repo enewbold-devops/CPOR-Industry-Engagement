@@ -109,6 +109,7 @@ SECTION 4: Risk and Status
 ---------------------------
 Purpose: Operational status and risk severity. Risk Rating feeds the
          pipeline's regulatoryExposure score in Stage 7.
+         Registration Status drives BPF routing and pipeline eligibility.
 
 Layout: 2-column
 
@@ -116,14 +117,16 @@ Layout: 2-column
   --------------------------------  --------------------------------
   Risk Rating                       Mandatory
   (cpor_riskrating)                 (cpor_mandatory)
-  Status                            (empty)
-  (cpor_status)
+  Registration Status               (empty)
+  (cpor_registrationstatus)
 
-FIELD NOTE — cpor_status: This is currently a free-text field. Add a field
-description (in the form field properties > Description) that reads:
-  "Valid values: Active, Superseded, Pending. Spell exactly as shown.
-  Future release will convert this to a dropdown."
-This guides analysts until the optionset conversion is complete.
+FIELD NOTE — cpor_registrationstatus: This is now a Choice field (Optionset 8
+from GII Guide 01). Values: Active / Superseded / Pending / Pending TM Review.
+Sellers and analysts see a dropdown; no manual text entry required.
+Do not display the deprecated cpor_status text field on any form.
+
+NOTE: Business Rule 1 reads cpor_registrationstatus to lock Superseded records.
+Ensure cpor_registrationstatus is visible on all forms where Business Rule 1 runs.
 
 
 SECTION 5: Compliance Dates

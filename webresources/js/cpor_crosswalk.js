@@ -9,8 +9,10 @@ var CporCrosswalk = (function () {
 
     // ── Lookup data (loaded once for filter dropdowns) ───────────
     var lookups = {
-        industryCodes: [],   // [{ cpor_industrycodeid, cpor_name, cpor_industrycloudvertical }]
-        territories:   []    // [{ territoryid, name }]
+        industryCodes:     [],   // [{ cpor_industrycodeid, cpor_name, cpor_industrycloudvertical }]
+        territories:       [],   // [{ territoryid, name }]
+        complianceDomains: [],   // [{ cpor_compliancedomainid, cpor_name, cpor_domaincode }]
+        regulatorySources: []    // [{ cpor_regulatorysourceid, cpor_name, cpor_sourceid }]
     };
 
     // ── Tab registry ─────────────────────────────────────────────
@@ -59,20 +61,8 @@ var CporCrosswalk = (function () {
                         key: 'cpor_implementationpriority', label: 'Priority', sortable: true, width: '90px',
                         render: function (r) { return CporComponents.priorityBadge(r.cpor_implementationpriority); }
                     },
-                    {
-                        key: 'cpor_primarysourceurls', label: 'Source URLs', sortable: false,
-                        render: function (r) {
-                            if (!r.cpor_primarysourceurls) return '—';
-                            // May be newline-separated; show first URL as link
-                            var urls = r.cpor_primarysourceurls.split(/[\r\n]+/).filter(Boolean);
-                            return urls.map(function (u) {
-                                var eu = CporComponents.esc(u.trim());
-                                return '<a href="' + eu + '" target="_blank" rel="noopener">' + eu + ' ↗</a>';
-                            }).join('<br>');
-                        }
-                    }
                 ],
-                selectFields: 'cpor_industrydomainmapid,cpor_name,cpor_implementationpriority,cpor_primarysourceurls',
+                selectFields: 'cpor_industrydomainmapid,cpor_name,cpor_implementationpriority',
                 expandFields: 'cpor_IndustryCode($select=cpor_name,cpor_industrycloudvertical),cpor_ComplianceDomain($select=cpor_name)',
                 idField:      'cpor_industrydomainmapid',
                 filterDefs: [
@@ -234,17 +224,209 @@ var CporCrosswalk = (function () {
             loadTabData(tabId);
         });
 
+        var newHandlers = {
+            'industry-domain-maps':  function () { openNewIndustryDomainMapPanel(tabId); },
+            'territory-source-maps': function () { openNewTerritorySourceMapPanel(tabId); }
+        };
+
         var cmdEl = document.getElementById('tab-command-bar');
         CporComponents.renderCommandBar(cmdEl, [
             {
                 id: 'new-map', label: def.newLabel, icon: '+', primary: true,
-                onClick: function () { CporXrm.openNewForm(def.entityName); }
+                onClick: newHandlers[tabId] || function () { CporXrm.openNewForm(def.entityName); }
             },
             {
                 id: 'refresh-tab', label: 'Refresh', icon: '↺',
                 onClick: function () { ts.page = 1; loadTabData(tabId); }
             }
         ], ts.total != null ? ts.total.toLocaleString() + ' records' : '');
+    }
+
+    // ── New-record side panels ────────────────────────────────────
+    function buildSelectOptions(items, valueKey, labelFn, placeholder) {
+        var html = '<option value="">' + CporComponents.esc(placeholder) + '</option>';
+        items.forEach(function (item) {
+            html += '<option value="' + CporComponents.esc(item[valueKey]) + '">' +
+                CporComponents.esc(labelFn(item)) + '</option>';
+        });
+        return html;
+    }
+
+    function openNewIndustryDomainMapPanel(tabId) {
+        var urlList = [];
+
+        var icOpts  = buildSelectOptions(lookups.industryCodes, 'cpor_industrycodeid',
+            function (c) { return c.cpor_name; }, '— Industry Code —');
+        var cdOpts  = buildSelectOptions(lookups.complianceDomains, 'cpor_compliancedomainid',
+            function (d) { return d.cpor_domaincode + ' — ' + d.cpor_name; }, '— Compliance Domain —');
+        var priOpts = '<option value="">— Priority —</option>' +
+            '<option value="154080000">Critical</option>' +
+            '<option value="154080001">High</option>' +
+            '<option value="154080002">Medium</option>' +
+            '<option value="154080003">Low</option>';
+
+        var bodyHtml =
+            '<div class="cpor-field">' +
+                '<label class="cpor-field__label">Name *</label>' +
+                '<input class="cpor-field__input" data-field="cpor_name" type="text"' +
+                    ' id="panel-f-name" placeholder="Map name…" autocomplete="off">' +
+            '</div>' +
+            '<div class="cpor-field">' +
+                '<label class="cpor-field__label">Industry Code</label>' +
+                '<select class="cpor-field__select" data-field="cpor_industrycode" id="panel-f-ic">' +
+                    icOpts + '</select>' +
+            '</div>' +
+            '<div class="cpor-field">' +
+                '<label class="cpor-field__label">Compliance Domain</label>' +
+                '<select class="cpor-field__select" data-field="cpor_compliancedomain" id="panel-f-cd">' +
+                    cdOpts + '</select>' +
+            '</div>' +
+            '<div class="cpor-field">' +
+                '<label class="cpor-field__label">Priority</label>' +
+                '<select class="cpor-field__select" data-field="cpor_implementationpriority" id="panel-f-pri">' +
+                    priOpts + '</select>' +
+            '</div>' +
+            '<div class="cpor-field">' +
+                '<label class="cpor-field__label">Source URLs</label>' +
+                '<div class="cpor-url-builder">' +
+                    '<div class="cpor-url-builder__row">' +
+                        '<input class="cpor-field__input" type="url" id="panel-url-input"' +
+                            ' placeholder="https://…" autocomplete="off">' +
+                        '<button class="cpor-btn cpor-btn--default" id="panel-url-add" type="button">Add</button>' +
+                    '</div>' +
+                    '<ul class="cpor-url-list" id="panel-url-list"></ul>' +
+                '</div>' +
+            '</div>';
+
+        function renderUrlList() {
+            var listEl = document.getElementById('panel-url-list');
+            if (!listEl) return;
+            listEl.innerHTML = urlList.map(function (u, i) {
+                return '<li class="cpor-url-list__item">' +
+                    '<span class="cpor-url-list__text">' + CporComponents.esc(u) + '</span>' +
+                    '<button class="cpor-url-list__remove" data-idx="' + i + '"' +
+                        ' type="button" title="Remove">✕</button>' +
+                    '</li>';
+            }).join('');
+            listEl.querySelectorAll('.cpor-url-list__remove').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    urlList.splice(parseInt(btn.dataset.idx, 10), 1);
+                    renderUrlList();
+                });
+            });
+        }
+
+        CporComponents.renderSidePanel({
+            title: 'New Industry Domain Map',
+            bodyHtml: bodyHtml,
+            onSave: function (getValues) {
+                var vals = getValues();
+                if (!vals.cpor_name || !vals.cpor_name.trim()) {
+                    return Promise.reject(new Error('Name is required.'));
+                }
+                var payload = { cpor_name: vals.cpor_name.trim() };
+                if (vals.cpor_industrycode) {
+                    payload['cpor_IndustryCode@odata.bind'] =
+                        '/cpor_industrycodes(' + vals.cpor_industrycode + ')';
+                }
+                if (vals.cpor_compliancedomain) {
+                    payload['cpor_ComplianceDomain@odata.bind'] =
+                        '/cpor_compliancedomains(' + vals.cpor_compliancedomain + ')';
+                }
+                if (vals.cpor_implementationpriority) {
+                    payload.cpor_implementationpriority =
+                        parseInt(vals.cpor_implementationpriority, 10);
+                }
+                if (urlList.length) {
+                    payload.cpor_primarysourceurls = urlList.join('|');
+                }
+                return CporXrm.createRecord('cpor_industrydomainmap', payload)
+                    .then(function () {
+                        CporComponents.showToast('Industry Domain Map created', 'success');
+                        tabState[tabId].page = 1;
+                        loadTabData(tabId);
+                    });
+            }
+        });
+
+        // Attach URL-builder handlers now that panel is in the DOM
+        var addBtn   = document.getElementById('panel-url-add');
+        var urlInput = document.getElementById('panel-url-input');
+
+        function addUrl() {
+            var u = urlInput ? urlInput.value.trim() : '';
+            if (!u) return;
+            urlList.push(u);
+            urlInput.value = '';
+            renderUrlList();
+            urlInput.focus();
+        }
+
+        if (addBtn)   addBtn.addEventListener('click', addUrl);
+        if (urlInput) urlInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); addUrl(); }
+        });
+    }
+
+    function openNewTerritorySourceMapPanel(tabId) {
+        var terrOpts   = buildSelectOptions(lookups.territories, 'territoryid',
+            function (t) { return t.name; }, '— Territory —');
+        var cdOpts     = buildSelectOptions(lookups.complianceDomains, 'cpor_compliancedomainid',
+            function (d) { return d.cpor_domaincode + ' — ' + d.cpor_name; }, '— Compliance Domain —');
+        var sourceOpts = buildSelectOptions(lookups.regulatorySources, 'cpor_regulatorysourceid',
+            function (s) { return s.cpor_name + ' (' + s.cpor_sourceid + ')'; }, '— Regulatory Source —');
+
+        var bodyHtml =
+            '<div class="cpor-field">' +
+                '<label class="cpor-field__label">Name *</label>' +
+                '<input class="cpor-field__input" data-field="cpor_name" type="text"' +
+                    ' placeholder="Map name…" autocomplete="off">' +
+            '</div>' +
+            '<div class="cpor-field">' +
+                '<label class="cpor-field__label">Territory</label>' +
+                '<select class="cpor-field__select" data-field="cpor_territory">' +
+                    terrOpts + '</select>' +
+            '</div>' +
+            '<div class="cpor-field">' +
+                '<label class="cpor-field__label">Compliance Domain</label>' +
+                '<select class="cpor-field__select" data-field="cpor_compliancedomain">' +
+                    cdOpts + '</select>' +
+            '</div>' +
+            '<div class="cpor-field">' +
+                '<label class="cpor-field__label">Regulatory Source</label>' +
+                '<select class="cpor-field__select" data-field="cpor_regulatorysource">' +
+                    sourceOpts + '</select>' +
+            '</div>';
+
+        CporComponents.renderSidePanel({
+            title: 'New Territory Source Map',
+            bodyHtml: bodyHtml,
+            onSave: function (getValues) {
+                var vals = getValues();
+                if (!vals.cpor_name || !vals.cpor_name.trim()) {
+                    return Promise.reject(new Error('Name is required.'));
+                }
+                var payload = { cpor_name: vals.cpor_name.trim() };
+                if (vals.cpor_territory) {
+                    payload['cpor_Territory@odata.bind'] =
+                        '/territories(' + vals.cpor_territory + ')';
+                }
+                if (vals.cpor_compliancedomain) {
+                    payload['cpor_ComplianceDomain@odata.bind'] =
+                        '/cpor_compliancedomains(' + vals.cpor_compliancedomain + ')';
+                }
+                if (vals.cpor_regulatorysource) {
+                    payload['cpor_RegulatorySource@odata.bind'] =
+                        '/cpor_regulatorysources(' + vals.cpor_regulatorysource + ')' ;
+                }
+                return CporXrm.createRecord('cpor_territorysourcemap', payload)
+                    .then(function () {
+                        CporComponents.showToast('Territory Source Map created', 'success');
+                        tabState[tabId].page = 1;
+                        loadTabData(tabId);
+                    });
+            }
+        });
     }
 
     function onTabChange(tabId) {
@@ -267,7 +449,19 @@ var CporCrosswalk = (function () {
                 '$filter=' + encodeURIComponent('cpor_territorycode ne null') +
                 '&$select=territoryid,name&$orderby=name%20asc&$top=100'
             ).then(function (r) { lookups.territories = r.records; })
-             .catch(function () { lookups.territories = []; })
+             .catch(function () { lookups.territories = []; }),
+
+            // Compliance Domains
+            CporXrm.fetchRecords('cpor_compliancedomains',
+                '$select=cpor_compliancedomainid,cpor_name,cpor_domaincode&$orderby=cpor_domaincode%20asc&$top=50'
+            ).then(function (r) { lookups.complianceDomains = r.records; })
+             .catch(function () { lookups.complianceDomains = []; }),
+
+            // Regulatory Sources
+            CporXrm.fetchRecords('cpor_regulatorysources',
+                '$select=cpor_regulatorysourceid,cpor_name,cpor_sourceid&$orderby=cpor_name%20asc&$top=100'
+            ).then(function (r) { lookups.regulatorySources = r.records; })
+             .catch(function () { lookups.regulatorySources = []; })
         ]).then(callback).catch(callback);
     }
 

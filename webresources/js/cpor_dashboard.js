@@ -65,7 +65,7 @@ var CporDashboard = (function () {
                 label:      'Stale — Needs Reverification',
                 sub:        'Not verified in 180+ days',
                 colorClass: 'warning',
-                filter:     "cpor_registrationstatus eq 154080000 and cpor_lastverifieddate lt " + CporXrm.todayMinusDays(180),
+                filter:     "cpor_registrationstatus eq 154080000 and cpor_lastverifieddate lt " + CporXrm.todayMinusDaysDate(180),
                 navFilter:  'stale'
             },
             {
@@ -238,7 +238,7 @@ var CporDashboard = (function () {
 
         CporXrm.fetchRecords('cpor_regulatoryregistrations',
             "$filter=" + encodeURIComponent(
-                "cpor_registrationstatus eq 154080000 and cpor_lastverifieddate lt " + CporXrm.todayMinusDays(180)
+                "cpor_registrationstatus eq 154080000 and cpor_lastverifieddate lt " + CporXrm.todayMinusDaysDate(180)
             ) +
             "&$select=cpor_regulatoryregistrationid,cpor_name,cpor_lastverifieddate,cpor_riskrating" +
             "&$expand=cpor_IndustryCode($select=cpor_name),cpor_Territory($select=name)" +

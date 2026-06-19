@@ -1057,6 +1057,133 @@
       }
     },
     {
+      "@odata.type": "#Microsoft.Dynamics.CRM.MemoAttributeMetadata",
+      "MetadataId": "326c39b7-8f6b-f111-ab0e-00224805fccb",
+      "HasChanged": null,
+      "AttributeOf": null,
+      "AttributeType": "Memo",
+      "ColumnNumber": 37,
+      "DeprecatedVersion": null,
+      "IntroducedVersion": "1.0",
+      "EntityLogicalName": "cpor_territorysourcemap",
+      "IsCustomAttribute": true,
+      "IsPrimaryId": false,
+      "IsValidODataAttribute": true,
+      "IsPrimaryName": false,
+      "IsValidForCreate": true,
+      "IsValidForRead": true,
+      "IsValidForUpdate": true,
+      "CanBeSecuredForRead": true,
+      "CanBeSecuredForCreate": true,
+      "CanBeSecuredForUpdate": true,
+      "IsSecured": false,
+      "IsRetrievable": false,
+      "IsFilterable": false,
+      "IsSearchable": false,
+      "IsManaged": false,
+      "LinkedAttributeId": null,
+      "LogicalName": "cpor_sourceurls",
+      "IsValidForForm": true,
+      "IsRequiredForForm": false,
+      "IsValidForGrid": true,
+      "SchemaName": "cpor_SourceURLs",
+      "ExternalName": null,
+      "IsLogical": false,
+      "IsDataSourceSecret": false,
+      "InheritsFrom": null,
+      "CreatedOn": "2026-06-19T03:34:18Z",
+      "ModifiedOn": "2026-06-19T03:34:18Z",
+      "SourceType": null,
+      "AutoNumberFormat": null,
+      "Format": "Text",
+      "ImeMode": "Auto",
+      "MaxLength": 6000,
+      "IsLocalizable": false,
+      "AttributeTypeName": {
+        "Value": "MemoType"
+      },
+      "Description": {
+        "LocalizedLabels": [
+          {
+            "Label": "",
+            "LanguageCode": 1033,
+            "IsManaged": false,
+            "MetadataId": "3ea14164-6524-4372-9f8d-c96c0c4953f4",
+            "HasChanged": null
+          }
+        ],
+        "UserLocalizedLabel": {
+          "Label": "",
+          "LanguageCode": 1033,
+          "IsManaged": false,
+          "MetadataId": "3ea14164-6524-4372-9f8d-c96c0c4953f4",
+          "HasChanged": null
+        }
+      },
+      "DisplayName": {
+        "LocalizedLabels": [
+          {
+            "Label": "Source URLs",
+            "LanguageCode": 1033,
+            "IsManaged": false,
+            "MetadataId": "f99e2cd3-fada-4e0d-8925-9268d2a6ad66",
+            "HasChanged": null
+          }
+        ],
+        "UserLocalizedLabel": {
+          "Label": "Source URLs",
+          "LanguageCode": 1033,
+          "IsManaged": false,
+          "MetadataId": "f99e2cd3-fada-4e0d-8925-9268d2a6ad66",
+          "HasChanged": null
+        }
+      },
+      "IsAuditEnabled": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyauditsettings"
+      },
+      "IsGlobalFilterEnabled": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyglobalfiltersettings"
+      },
+      "IsSortableEnabled": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyissortablesettings"
+      },
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "IsRenameable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "isrenameable"
+      },
+      "IsValidForAdvancedFind": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifysearchsettings"
+      },
+      "RequiredLevel": {
+        "Value": "None",
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyrequirementlevelsettings"
+      },
+      "CanModifyAdditionalSettings": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyadditionalsettings"
+      },
+      "Settings": [],
+      "FormatName": {
+        "Value": "Text"
+      }
+    },
+    {
       "@odata.type": "#Microsoft.Dynamics.CRM.LookupAttributeMetadata",
       "MetadataId": "8b5aaefc-6de1-494a-9aab-42541ca78cac",
       "HasChanged": null,

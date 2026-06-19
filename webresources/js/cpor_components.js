@@ -143,9 +143,10 @@ var CporComponents = (function () {
     function statusBadge(val) {
         // val is an integer from Dataverse Picklist (cpor_registrationstatus)
         var intMap = {
-            154080000: ['active',     'Active'],
-            154080001: ['superseded', 'Superseded'],
-            154080002: ['pending',    'Pending']
+            154080000: ['active',      'Active'],
+            154080001: ['superseded',  'Superseded'],
+            154080002: ['pending',     'Pending'],
+            154080003: ['pending-tm',  'Pending TM Review']
         };
         var entry = intMap[val];
         if (entry) return '<span class="cpor-badge cpor-badge--' + entry[0] + '">' + entry[1] + '</span>';
@@ -624,27 +625,356 @@ var CporComponents = (function () {
         };
     }
 
+    // ── Side Panel (Drawer) ─────────────────────────────────────
+    /**
+     * Open a right-side slide-in panel/drawer.
+     * @param {Object} opts
+     *   title    {string}   Panel header text.
+     *   bodyHtml {string}   Inner HTML for the scrollable body.
+     *   onSave   {Function} Receives a getValues() fn; must return a Promise.
+     *   onClose  {Function} Optional. Called after the panel is removed.
+     * @returns {{ close, getValues, showError }}
+     */
+    function renderSidePanel(opts) {
+        // Remove any existing panel first
+        var existing = document.getElementById('cpor-panel-overlay');
+        if (existing) existing.parentNode.removeChild(existing);
+
+        var overlay = document.createElement('div');
+        overlay.id        = 'cpor-panel-overlay';
+        overlay.className = 'cpor-panel-overlay';
+        overlay.innerHTML =
+            '<div class="cpor-panel" id="cpor-panel" role="dialog" aria-modal="true"' +
+                ' aria-label="' + esc(opts.title || '') + '">' +
+                '<div class="cpor-panel__header">' +
+                    '<span class="cpor-panel__title">' + esc(opts.title || '') + '</span>' +
+                    '<button class="cpor-panel__close" id="cpor-panel-close" aria-label="Close">✕</button>' +
+                '</div>' +
+                '<div class="cpor-panel__body" id="cpor-panel-body">' +
+                    (opts.bodyHtml || '') +
+                '</div>' +
+                '<div class="cpor-panel__footer">' +
+                    '<button class="cpor-btn cpor-btn--primary" id="cpor-panel-save">Save</button>' +
+                    '<button class="cpor-btn cpor-btn--default" id="cpor-panel-cancel">Cancel</button>' +
+                    '<span class="cpor-panel__footer-error" id="cpor-panel-error"></span>' +
+                '</div>' +
+            '</div>';
+
+        document.body.appendChild(overlay);
+
+        // Trigger slide-in on next frame
+        requestAnimationFrame(function () {
+            var panel = document.getElementById('cpor-panel');
+            if (panel) panel.classList.add('cpor-panel--open');
+        });
+
+        function close() {
+            var panel = document.getElementById('cpor-panel');
+            if (panel) panel.classList.remove('cpor-panel--open');
+            setTimeout(function () {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 280);
+            if (opts.onClose) opts.onClose();
+        }
+
+        function getValues() {
+            var body = document.getElementById('cpor-panel-body');
+            if (!body) return {};
+            var values = {};
+            body.querySelectorAll('[data-field]').forEach(function (el) {
+                values[el.dataset.field] = el.value;
+            });
+            return values;
+        }
+
+        function showPanelError(msg) {
+            var errEl = document.getElementById('cpor-panel-error');
+            if (errEl) errEl.textContent = msg || '';
+        }
+
+        var closeBtn  = document.getElementById('cpor-panel-close');
+        var cancelBtn = document.getElementById('cpor-panel-cancel');
+        var saveBtn   = document.getElementById('cpor-panel-save');
+
+        if (closeBtn)  closeBtn.addEventListener('click',  close);
+        if (cancelBtn) cancelBtn.addEventListener('click', close);
+
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay) close();
+        });
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function () {
+                showPanelError('');
+                saveBtn.disabled    = true;
+                saveBtn.textContent = 'Saving…';
+                var p = opts.onSave ? opts.onSave(getValues) : Promise.resolve();
+                if (!p || typeof p.then !== 'function') p = Promise.resolve();
+                p.then(function () {
+                    close();
+                }).catch(function (err) {
+                    saveBtn.disabled    = false;
+                    saveBtn.textContent = 'Save';
+                    showPanelError(err && err.message ? err.message : String(err));
+                });
+            });
+        }
+
+        return { close: close, getValues: getValues, showError: showPanelError };
+    }
+
+    // ── Modal Dialog (centered) ──────────────────────────────────
+    /**
+     * Open a centered modal dialog with optional wizard step navigation.
+     *
+     * @param {Object} opts
+     *   title       {string}    Modal header title.
+     *   subtitle    {string}    Optional subtitle shown below title.
+     *   steps       {Array}     Optional [{label}] — enables wizard step indicator.
+     *   initialStep {number}    0-based index of the active step on open (default 0).
+     *   renderStep  {Function}  function(stepIndex, bodyEl) — called to render content
+     *                           into the body area each time the active step changes.
+     *   validateStep {Function} Optional function(stepIndex, getValues) — returns
+     *                           null (ok) or an error message string.
+     *   onSubmit    {Function}  function(getAllValues) — called on final step Submit.
+     *                           Must return a Promise.
+     *   onClose     {Function}  Optional — called when modal is dismissed.
+     *   submitLabel {string}    Label for the submit button (default 'Submit').
+     *
+     * @returns {{ close, setStep, getValues, showError, getAllValues }}
+     */
+    function renderModal(opts) {
+        opts = opts || {};
+        var steps      = opts.steps || [];
+        var totalSteps = steps.length;
+        var activeStep = opts.initialStep || 0;
+        // Accumulate field values per step so Back does not lose data
+        var stepValues = {};
+
+        // Remove any existing modal
+        var existing = document.getElementById('cpor-modal-overlay');
+        if (existing) existing.parentNode.removeChild(existing);
+
+        var overlay = document.createElement('div');
+        overlay.id        = 'cpor-modal-overlay';
+        overlay.className = 'cpor-modal-overlay';
+        overlay.setAttribute('role', 'presentation');
+
+        var stepsHtml = '';
+        if (totalSteps > 1) {
+            stepsHtml = '<div class="cpor-wizard-steps" role="list">' +
+                steps.map(function (s, i) {
+                    var cls = i < activeStep  ? 'cpor-wizard-step cpor-wizard-step--done'
+                            : i === activeStep ? 'cpor-wizard-step cpor-wizard-step--active'
+                            :                    'cpor-wizard-step';
+                    return '<div class="' + cls + '" role="listitem" data-step="' + i + '">' +
+                        '<span class="cpor-wizard-step__num">' + (i < activeStep ? '✔' : (i + 1)) + '</span>' +
+                        '<span class="cpor-wizard-step__label">' + esc(s.label) + '</span>' +
+                        (i < totalSteps - 1 ? '<span class="cpor-wizard-step__line"></span>' : '') +
+                    '</div>';
+                }).join('') +
+            '</div>';
+        }
+
+        overlay.innerHTML =
+            '<div class="cpor-modal" id="cpor-modal" role="dialog" aria-modal="true"' +
+                ' aria-label="' + esc(opts.title || '') + '">' +
+                '<div class="cpor-modal__header">' +
+                    '<div class="cpor-modal__titles">' +
+                        '<span class="cpor-modal__title">' + esc(opts.title || '') + '</span>' +
+                        (opts.subtitle ? '<span class="cpor-modal__subtitle">' + esc(opts.subtitle) + '</span>' : '') +
+                    '</div>' +
+                    '<button class="cpor-modal__close" id="cpor-modal-close" aria-label="Close dialog">✕</button>' +
+                '</div>' +
+                (stepsHtml ? '<div class="cpor-modal__steps" id="cpor-modal-steps">' + stepsHtml + '</div>' : '') +
+                '<div class="cpor-modal__body" id="cpor-modal-body"></div>' +
+                '<div class="cpor-modal__footer">' +
+                    '<button class="cpor-btn cpor-btn--default" id="cpor-modal-back"' +
+                        (totalSteps <= 1 ? ' style="display:none"' : '') + '>← Back</button>' +
+                    '<div class="cpor-modal__footer-right">' +
+                        '<span class="cpor-modal__footer-error" id="cpor-modal-error"></span>' +
+                        '<button class="cpor-btn cpor-btn--default" id="cpor-modal-cancel">Cancel</button>' +
+                        '<button class="cpor-btn cpor-btn--primary" id="cpor-modal-next">' +
+                            (totalSteps <= 1 ? (opts.submitLabel || 'Submit') : 'Next →') +
+                        '</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+
+        document.body.appendChild(overlay);
+
+        var modal     = overlay.querySelector('#cpor-modal');
+        var bodyEl    = overlay.querySelector('#cpor-modal-body');
+        var stepsEl   = overlay.querySelector('#cpor-modal-steps');
+        var backBtn   = overlay.querySelector('#cpor-modal-back');
+        var nextBtn   = overlay.querySelector('#cpor-modal-next');
+        var cancelBtn = overlay.querySelector('#cpor-modal-cancel');
+        var closeBtn  = overlay.querySelector('#cpor-modal-close');
+        var errorEl   = overlay.querySelector('#cpor-modal-error');
+
+        // Animate in
+        requestAnimationFrame(function () { modal.classList.add('cpor-modal--open'); });
+
+        function showError(msg) {
+            if (errorEl) errorEl.textContent = msg || '';
+        }
+
+        function collectValues() {
+            var values = {};
+            if (bodyEl) {
+                bodyEl.querySelectorAll('[data-field]').forEach(function (el) {
+                    var type = el.type || el.tagName.toLowerCase();
+                    if (type === 'checkbox') values[el.dataset.field] = el.checked;
+                    else values[el.dataset.field] = el.value;
+                });
+            }
+            return values;
+        }
+
+        function getAllValues() {
+            // Merge accumulated step values with current step's live values
+            var current = collectValues();
+            var merged  = {};
+            Object.keys(stepValues).forEach(function (k) { merged[k] = stepValues[k]; });
+            Object.keys(current).forEach(function (k) { merged[k] = current[k]; });
+            return merged;
+        }
+
+        function updateStepIndicator() {
+            if (!stepsEl) return;
+            stepsEl.querySelectorAll('.cpor-wizard-step').forEach(function (el, i) {
+                el.className = i < activeStep  ? 'cpor-wizard-step cpor-wizard-step--done'
+                             : i === activeStep ? 'cpor-wizard-step cpor-wizard-step--active'
+                             :                    'cpor-wizard-step';
+                var numEl = el.querySelector('.cpor-wizard-step__num');
+                if (numEl) numEl.textContent = i < activeStep ? '✔' : (i + 1);
+            });
+        }
+
+        function renderCurrentStep() {
+            bodyEl.innerHTML = '';
+            showError('');
+            if (opts.renderStep) opts.renderStep(activeStep, bodyEl);
+            // Restore saved values for this step
+            if (stepValues[activeStep]) {
+                Object.keys(stepValues[activeStep]).forEach(function (field) {
+                    var el = bodyEl.querySelector('[data-field="' + field + '"]');
+                    if (!el) return;
+                    if (el.type === 'checkbox') el.checked = !!stepValues[activeStep][field];
+                    else el.value = stepValues[activeStep][field];
+                });
+            }
+            // Back button visibility
+            if (backBtn) {
+                backBtn.style.display = (totalSteps > 1 && activeStep > 0) ? '' : 'none';
+            }
+            // Next/Submit label
+            if (nextBtn) {
+                var isLast = (totalSteps <= 1) || (activeStep === totalSteps - 1);
+                nextBtn.textContent = isLast ? (opts.submitLabel || 'Create Registration') : 'Next →';
+            }
+            updateStepIndicator();
+        }
+
+        renderCurrentStep();
+
+        function close() {
+            modal.classList.remove('cpor-modal--open');
+            setTimeout(function () {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 240);
+            if (opts.onClose) opts.onClose();
+        }
+
+        function goBack() {
+            // Save current step values before going back
+            var cv = collectValues();
+            stepValues[activeStep] = cv;
+            showError('');
+            activeStep = Math.max(0, activeStep - 1);
+            renderCurrentStep();
+        }
+
+        function goNext() {
+            // Save current step values
+            var cv = collectValues();
+            stepValues[activeStep] = cv;
+            showError('');
+
+            // Validate current step
+            if (opts.validateStep) {
+                var err = opts.validateStep(activeStep, getAllValues);
+                if (err) { showError(err); return; }
+            }
+
+            var isLast = (totalSteps <= 1) || (activeStep === totalSteps - 1);
+            if (!isLast) {
+                activeStep = Math.min(totalSteps - 1, activeStep + 1);
+                renderCurrentStep();
+            } else {
+                // Submit
+                nextBtn.disabled    = true;
+                nextBtn.textContent = 'Saving…';
+                var p = opts.onSubmit ? opts.onSubmit(getAllValues) : Promise.resolve();
+                if (!p || typeof p.then !== 'function') p = Promise.resolve();
+                p.then(function () {
+                    close();
+                }).catch(function (err) {
+                    nextBtn.disabled    = false;
+                    nextBtn.textContent = opts.submitLabel || 'Create Registration';
+                    showError(err && err.message ? err.message : String(err));
+                });
+            }
+        }
+
+        if (closeBtn)  closeBtn.addEventListener('click',  close);
+        if (cancelBtn) cancelBtn.addEventListener('click', close);
+        if (backBtn)   backBtn.addEventListener('click',   goBack);
+        if (nextBtn)   nextBtn.addEventListener('click',   goNext);
+
+        // Close on backdrop click
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay) close();
+        });
+
+        // Keyboard: Escape to close, Enter on Next
+        overlay.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { e.preventDefault(); close(); }
+        });
+
+        function setStep(index) {
+            if (index < 0 || index >= totalSteps) return;
+            stepValues[activeStep] = collectValues();
+            activeStep = index;
+            renderCurrentStep();
+        }
+
+        return { close: close, setStep: setStep, getValues: collectValues, getAllValues: getAllValues, showError: showError };
+    }
+
     // ── Expose ──────────────────────────────────────────────────
     return {
-        esc:             esc,
-        showToast:       showToast,
-        renderHeader:    renderHeader,
-        renderKPICard:   renderKPICard,
-        riskBadge:       riskBadge,
-        statusBadge:     statusBadge,
-        verticalDot:     verticalDot,
-        deadlineChip:    deadlineChip,
-        boolIcon:        boolIcon,
-        priorityBadge:   priorityBadge,
-        showSpinner:     showSpinner,
-        showEmpty:       showEmpty,
-        showError:       showError,
-        renderTabs:      renderTabs,
-        getActiveTabPanel:   getActiveTabPanel,
-        setTabCount:     setTabCount,
-        renderTable:     renderTable,
-        renderFilterBar: renderFilterBar,
-        renderPagination:renderPagination,
-        renderCommandBar:renderCommandBar
+        esc:              esc,
+        showToast:        showToast,
+        renderHeader:     renderHeader,
+        renderKPICard:    renderKPICard,
+        riskBadge:        riskBadge,
+        statusBadge:      statusBadge,
+        verticalDot:      verticalDot,
+        deadlineChip:     deadlineChip,
+        boolIcon:         boolIcon,
+        priorityBadge:    priorityBadge,
+        showSpinner:      showSpinner,
+        showEmpty:        showEmpty,
+        showError:        showError,
+        renderTabs:       renderTabs,
+        getActiveTabPanel:getActiveTabPanel,
+        setTabCount:      setTabCount,
+        renderTable:      renderTable,
+        renderFilterBar:  renderFilterBar,
+        renderPagination: renderPagination,
+        renderCommandBar: renderCommandBar,
+        renderSidePanel:  renderSidePanel,
+        renderModal:      renderModal
     };
 }());

@@ -164,11 +164,49 @@ Guidance:
   Other                — Catch-all for edge cases
 
 ================================================================================
+OPTIONSET 8 — cpor_registrationstatus
+================================================================================
+Operational lifecycle status for cpor_RegulatoryRegistration records.
+Replaces the free-text cpor_status field (deprecated).
+Used by: cpor_RegulatoryRegistration
+
+Schema Name:  cpor_registrationstatus
+Display Name: Registration Status
+Description:  Lifecycle status controlling pipeline eligibility and BPF
+              workflow routing for a regulatory registration record.
+Type:         Global Choice
+
+Default value on new record: 154080002 (Pending)
+
+Options:
+  154080000  Active           Record is verified and eligible for Stage 0 grounding
+  154080001  Superseded       Record is retired; locked by Business Rule 1
+  154080002  Pending          Record is in-progress (BPF Stages 1-3)
+  154080003  Pending TM Review  Record has completed analyst review and is awaiting
+                               Territory Manager approval (BPF Stage 4). Flow 4 uses
+                               this value as its trigger condition.
+
+Transition rules:
+  New record created    → 154080002 (Pending)       set by BPF Stage 1 entry action
+  BPF advances Stage 4  → 154080003 (Pending TM Review)  set by BPF Stage 4 entry action
+  TM approves (Flow 4)  → 154080000 (Active)        set by Flow 4 approval branch
+  TM rejects (Flow 4)   → 154080002 (Pending)       set by Flow 4 rejection branch
+  Stale (Flow 1)        → 154080002 (Pending)       set by Flow 1 re-verification step
+  Manually retired      → 154080001 (Superseded)    set by analyst
+
+NOTE: Stage 0 pipeline filter: cpor_registrationstatus eq 154080000 (Active only).
+  Records in any other status are never returned to the pipeline.
+
+NOTE: The deprecated cpor_status text field (Active/Superseded/Pending string values)
+  is retained in the schema for one release cycle to allow data migration. Run the
+  bulk update in the POST-DEPLOYMENT STEPS below before removing it.
+
+================================================================================
 POST-DEPLOYMENT STEPS
 ================================================================================
 
 1.  In make.powerapps.com, open the CPOR solution and navigate to
-    Objects > Choices. Confirm all 7 new Choices appear with the correct
+    Objects > Choices. Confirm all 8 new Choices appear with the correct
     display names and options.
 
 2.  IMPORTANT: Verify the integer values that were actually deployed by
@@ -183,6 +221,28 @@ POST-DEPLOYMENT STEPS
     cpor_regulatortype must be added to optionSetMapper.js alongside
     cpor_legaltype and cpor_riskrating (all three are used by
     cpor_RegulatoryRegistration).
+
+    cpor_registrationstatus must also be added to optionSetMapper.js.
+
+4.  DATA MIGRATION — cpor_status → cpor_registrationstatus:
+    After deploying the cpor_registrationstatus Choice column, run a bulk
+    update to migrate existing cpor_status text values to the new integers.
+    Execute the following 3 PATCH batches via Postman or Power Automate:
+
+    a) Active records:
+       GET /cpor_regulatoryregistrations?$filter=cpor_status eq 'Active'&$select=cpor_regulatoryregistrationid
+       For each: PATCH cpor_registrationstatus = 154080000
+
+    b) Superseded records:
+       GET /cpor_regulatoryregistrations?$filter=cpor_status eq 'Superseded'&$select=cpor_regulatoryregistrationid
+       For each: PATCH cpor_registrationstatus = 154080001
+
+    c) Pending records:
+       GET /cpor_regulatoryregistrations?$filter=cpor_status eq 'Pending'&$select=cpor_regulatoryregistrationid
+       For each: PATCH cpor_registrationstatus = 154080002
+
+    Once verified, mark cpor_status as deprecated in the solution.
+    Do NOT delete cpor_status in this release — retain for one cycle.
 
 ================================================================================
 END OF GUIDE 01

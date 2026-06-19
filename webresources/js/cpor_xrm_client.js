@@ -17,15 +17,17 @@ var CporXrm = (function () {
     };
 
     var REGISTRATION_STATUS = {
-        ACTIVE:     154080000,
-        SUPERSEDED: 154080001,
-        PENDING:    154080002
+        ACTIVE:          154080000,
+        SUPERSEDED:      154080001,
+        PENDING:         154080002,
+        PENDING_TM_REVIEW: 154080003
     };
 
     var STATUS_LABEL = {
         154080000: 'Active',
         154080001: 'Superseded',
-        154080002: 'Pending'
+        154080002: 'Pending',
+        154080003: 'Pending TM Review'
     };
 
     var INDUSTRY_VERTICAL = {
@@ -91,6 +93,16 @@ var CporXrm = (function () {
 
     function todayMinusDays(n) {
         return toODataDate(addDays(new Date(), -n));
+    }
+
+    /** Returns a date-only string (YYYY-MM-DD) for OData DateOnly fields. */
+    function toODataDateOnly(date) {
+        return date.toISOString().substring(0, 10);
+    }
+
+    /** Like todayMinusDays but returns YYYY-MM-DD — use for DateOnly fields. */
+    function todayMinusDaysDate(n) {
+        return toODataDateOnly(addDays(new Date(), -n));
     }
 
     function todayPlusDays(n) {
@@ -183,15 +195,18 @@ var CporXrm = (function () {
     }
 
     /**
-     * Count records matching a filter via OData $count.
+     * Count records matching a filter.
+     * Uses $count=true with $top=1 so the response is JSON with @odata.count.
+     * ($top=0 is rejected by Dataverse; /$count requires Accept: text/plain.)
      * @param {string} entitySetName  plural set name
      * @param {string} filter         OData $filter value (unencoded)
      */
     function countRecords(entitySetName, filter) {
-        var path = entitySetName + '?$count=true&$top=0';
+        // createdon is a system field present on every Dataverse entity; used to minimise payload.
+        var path = entitySetName + '?$count=true&$top=1&$select=createdon';
         if (filter) path += '&$filter=' + encodeURIComponent(filter);
         return odataFetch(path).then(function (d) {
-            return d['@odata.count'] || 0;
+            return typeof d['@odata.count'] === 'number' ? d['@odata.count'] : (d.value ? d.value.length : 0);
         });
     }
 
@@ -208,6 +223,20 @@ var CporXrm = (function () {
                 count:    d['@odata.count'] !== undefined ? d['@odata.count'] : null,
                 nextLink: d['@odata.nextLink'] || null
             };
+        });
+    }
+
+    /**
+     * Create a new record.
+     * @param {string} entityName  singular logical name  e.g. "cpor_industrydomainmap"
+     * @param {Object} data        field values and/or @odata.bind navigation properties
+     * @returns Promise<{ id: string }>
+     */
+    function createRecord(entityName, data) {
+        var xrm = getXrm();
+        if (!xrm) return Promise.reject(new Error('Xrm not available'));
+        return xrm.WebApi.createRecord(entityName, data).then(function (r) {
+            return { id: r.id };
         });
     }
 
@@ -252,11 +281,13 @@ var CporXrm = (function () {
         getContext: getContext,
 
         // Date utils
-        addDays:           addDays,
-        toODataDate:       toODataDate,
-        todayMinusDays:    todayMinusDays,
-        todayPlusDays:     todayPlusDays,
-        todayOData:        todayOData,
+        addDays:              addDays,
+        toODataDate:          toODataDate,
+        toODataDateOnly:      toODataDateOnly,
+        todayMinusDays:       todayMinusDays,
+        todayMinusDaysDate:   todayMinusDaysDate,
+        todayPlusDays:        todayPlusDays,
+        todayOData:           todayOData,
         formatDate:        formatDate,
         formatDateRelative:formatDateRelative,
         toInputDate:       toInputDate,
@@ -267,6 +298,7 @@ var CporXrm = (function () {
         queryRecords:  queryRecords,
         countRecords:  countRecords,
         fetchRecords:  fetchRecords,
+        createRecord:  createRecord,
         updateRecord:  updateRecord,
 
         // Navigation

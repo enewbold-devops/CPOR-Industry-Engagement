@@ -488,7 +488,11 @@ var CporRegistrationManager = (function () {
             {
                 id: 'new-reg', label: 'New Registration', icon: '+', primary: true,
                 onClick: function () {
-                    CporXrm.openNewForm('cpor_regulatoryregistration');
+                    CporNewRegistrationDialog.open(function () {
+                        // Refresh list after successful creation
+                        state.page = 1;
+                        loadData();
+                    });
                 }
             },
             {

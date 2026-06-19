@@ -6,15 +6,15 @@ Date: 2026-06-15
 
 PURPOSE
 -------
-Define 3 Power Automate flows that automate catalog maintenance and Lead
-data synchronization. These flows handle logic that cannot be expressed in
-MDA Business Rules (date threshold comparisons, cross-entity writes,
-external notifications).
+Define 4 Power Automate flows that automate catalog maintenance, registration
+approval, and Lead data synchronization. These flows handle logic that cannot
+be expressed in MDA Business Rules (date threshold comparisons, cross-entity
+writes, TM approval routing, external notifications).
 
   Flow 1: Stale Registration Weekly Digest
     Notifies the Global Industry Team of registrations not verified in
-    the last 180 days. Ensures the team has a weekly prompt to review
-    stale records before the pipeline freshness gate excludes them.
+    the last 180 days. Also moves stale Active records to Pending and
+    returns their BPF to Stage 3 (Legislation Verification) for re-review.
 
   Flow 2: Lead industrycode → cpor_industrycodeid Auto-sync
     When a seller sets the OOB industrycode picklist on a Lead, automatically
@@ -26,6 +26,12 @@ external notifications).
     When a Lead is qualified to an Account + Opportunity, copies
     cpor_industrycodeid from the Lead to the new Account. Ensures Accounts
     carry the same industry catalog FK for portfolio reporting.
+
+  Flow 4: Territory Manager Approval
+    When a registration advances to BPF Stage 4 (cpor_registrationstatus
+    changes to Pending TM Review), routes a Power Automate Approval to the
+    Territory Manager (territory.managerid). On approval activates the
+    record; on rejection returns it to Pending at Stage 3.
 
 PREREQUISITE:
   GII Guides 00-07 deployed (entities and fields must exist).
@@ -95,13 +101,16 @@ STEP 2: List stale registrations
 --------------------------------------------------------------------------------
 Action: List rows (Dataverse connector)
   Table Name:   cpor_regulatoryregistrations
-  Filter rows:  cpor_status eq 'Active' and cpor_lastverifieddate lt
+  Filter rows:  cpor_registrationstatus eq 154080000 and cpor_lastverifieddate lt
                 @{addDays(utcNow(), -180)}
   Select columns: cpor_regulatoryregistrationid,cpor_name,cpor_lastverifieddate,
                   cpor_riskrating,_cpor_industrycodeid_value,
                   _cpor_territoryid_value,cpor_compliancedeadline
   Order by:     cpor_lastverifieddate asc
   Row count:    100
+
+NOTE: cpor_registrationstatus eq 154080000 is the Active optionset integer.
+This replaces the deprecated cpor_status eq 'Active' string filter.
 
 NOTE ON DATE EXPRESSION:
   addDays(utcNow(), -180) returns an ISO 8601 datetime string 180 days ago.
@@ -211,6 +220,47 @@ Action: Create a new row (Dataverse connector)
   Table: Audit Logs or use an existing notes/annotation entity.
   NOTE: If no audit log table is available, skip this step. The flow run
   history in Power Automate provides sufficient logging for most orgs.
+
+--------------------------------------------------------------------------------
+STEP 7 (True branch): Move stale records to Pending and return BPF to Stage 3
+--------------------------------------------------------------------------------
+This step ensures stale Active records re-enter the qualification workflow
+at Legislation Verification rather than silently dropping out of the pipeline.
+
+Action: Apply to each
+  Input:  outputs('List_rows')?['body/value']   (the same stale record list)
+
+  Inside the loop:
+
+  7a. Update Registration Status to Pending:
+  Action: Update a row (Dataverse connector)
+    Table Name:  cpor_regulatoryregistrations
+    Row ID:      @{items('Apply_to_each')['cpor_regulatoryregistrationid']}
+    cpor_registrationstatus: 154080002   (Pending)
+
+  7b. Return BPF to Legislation Verification (Stage 3):
+  Action: Perform a bound action (Dataverse connector)
+    Table Name:         cpor_regulatoryregistrations
+    Row ID:             @{items('Apply_to_each')['cpor_regulatoryregistrationid']}
+    Action Name:        SetProcessStage
+    processstageid:     <GUID of Stage 3 — Legislation Verification>
+                        (retrieve once via GET /processstages?$filter=stagename
+                         eq 'Legislation Verification'&$select=processstageid
+                         after deploying the BPF, then hardcode the GUID)
+    traversedpath:      (leave empty — Dataverse recalculates)
+
+  NOTE ON SetProcessStage: This bound action moves the BPF process instance
+  for the record to the specified stage. The analyst who receives the stale
+  notification will find the record at Stage 3 ready for re-verification.
+  If the record does not yet have a BPF process instance (was created before
+  the BPF was deployed), the action will fail gracefully — add a Configure
+  run after > Continue on error for this step to prevent the loop from
+  aborting.
+
+  NOTE ON LOOP CAP: Apply to each processes all records in varStaleList
+  (up to 100 from Step 2). For large catalogs with many stale records,
+  consider capping with a counter variable and breaking at 50 to avoid
+  throttling. Monitor first runs in Power Automate run history.
 
 --------------------------------------------------------------------------------
 FLOW ACTIVATION
@@ -470,8 +520,9 @@ FLOW SUMMARY
   CPOR — Stale Registration Weekly Digest      Scheduled (weekly)   Catalog health
   CPOR — Lead Industry Code Auto-sync          Lead row modified    Lead enrichment
   CPOR — Copy Industry Code to Account...      Account row added    Lead qualification
+  CPOR — Territory Manager Approval            Reg. row modified    TM approval routing
 
-All 3 flows must be in Active (On) state for normal operations.
+All 4 flows must be in Active (On) state for normal operations.
 
 MONITORING:
   In Power Automate > My flows, check each flow's Run history weekly.
@@ -484,3 +535,225 @@ MONITORING:
 RECOMMENDED: Assign all 3 flows to a shared service account
 (e.g. CPOR-Automation@contoso.com) owned by the CPOR admin team so that
 flow ownership persists beyond individual user tenure.
+
+================================================================================
+FLOW 4: Territory Manager Approval
+================================================================================
+
+FLOW NAME:    CPOR — Territory Manager Approval
+TRIGGER TYPE: Automated (Dataverse row updated)
+PURPOSE:      When a registration's cpor_registrationstatus changes to
+              Pending TM Review (154080003) — indicating BPF Stage 4 entry —
+              route a Power Automate Approval to the Territory Manager
+              (territory.managerid). On approval, activate the record and
+              advance the BPF to Stage 5. On rejection, return the record
+              to Pending and move the BPF back to Stage 3.
+
+RATIONALE:
+  The BPF Stage 4 entry action sets cpor_registrationstatus = 154080003
+  (Pending TM Review). This flow uses that as its trigger condition, keeping
+  the approval routing decoupled from the BPF configuration itself.
+  territory.managerid (OOB field on the Territory entity) provides the
+  TM identity without requiring any additional custom fields.
+
+PREREQUISITE:
+  cpor_approvedby (Lookup → systemuser) and cpor_approvaldate (Date Only)
+  must be deployed on cpor_RegulatoryRegistration (see GII Guide 04 Part B).
+  territory.managerid must be populated for all territories with registered
+  regulations. Verify: GET /territories?$filter=managerid ne null&$count=true
+  BPF "CPOR — Registration Qualification" must be deployed and active.
+  Power Automate Approvals connector requires Power Automate Premium licensing.
+
+--------------------------------------------------------------------------------
+TRIGGER: When a row is modified (Dataverse)
+--------------------------------------------------------------------------------
+  Table Name:     cpor_regulatoryregistrations
+  Change type:    Modified
+  Column filter:  cpor_registrationstatus
+                  (trigger only when registration status changes)
+
+--------------------------------------------------------------------------------
+STEP 1: Check if this is a Stage 4 TM Review trigger
+--------------------------------------------------------------------------------
+Action: Condition
+  Condition: triggerOutputs()?['body/cpor_registrationstatus']   Equals   154080003
+
+True Branch: proceed with TM approval routing.
+False Branch: Terminate (Succeeded). Status changed to something else — no action.
+
+--------------------------------------------------------------------------------
+STEP 2 (True branch): Get the registration's territory and its manager
+--------------------------------------------------------------------------------
+Action: Get a row by ID (Dataverse connector)
+  Table Name:  territories
+  Row ID:      @{triggerOutputs()?['body/_cpor_territoryid_value']}
+  Select columns: territoryid,name,_managerid_value
+
+Store result as varTerritory.
+
+--------------------------------------------------------------------------------
+STEP 3 (True branch): Check territory has a manager assigned
+--------------------------------------------------------------------------------
+Action: Condition
+  Condition: outputs('Get_Territory')?['body/_managerid_value']   Is not null
+
+True Branch: proceed to send approval.
+False Branch:
+  Action: Update a row (Dataverse connector)
+    Table Name:  cpor_regulatoryregistrations
+    Row ID:      @{triggerOutputs()?['body/cpor_regulatoryregistrationid']}
+    cpor_registrationstatus: 154080002   (revert to Pending)
+    cpor_analystnotes: concat(triggerOutputs()?['body/cpor_analystnotes'],
+      ' [Flow 4 ', utcNow(), '] No Territory Manager assigned to territory ',
+      outputs('Get_Territory')?['body/name'],
+      ' — approval routing failed. Assign a manager and re-submit.')
+  Action: Send an email / Teams notification to CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET
+    Subject: CPOR TM Approval Failed — No Manager on Territory
+    Body: Registration @{triggerOutputs()?['body/cpor_name']} could not be
+          routed for TM approval. Territory
+          @{outputs('Get_Territory')?['body/name']} has no managerid assigned.
+          Assign a Territory Manager and set registration status to
+          Pending TM Review to re-trigger approval.
+  Terminate (Succeeded).
+
+NOTE: This guard prevents the approval from silently failing. The record
+  reverts to Pending so the analyst can resolve the territory assignment.
+
+--------------------------------------------------------------------------------
+STEP 4 (True branch): Get TM user details for approval routing
+--------------------------------------------------------------------------------
+Action: Get a row by ID (Dataverse connector)
+  Table Name:  systemusers
+  Row ID:      @{outputs('Get_Territory')?['body/_managerid_value']}
+  Select columns: systemuserid,fullname,internalemailaddress
+
+Store result as varTerritoryManager.
+
+--------------------------------------------------------------------------------
+STEP 5 (True branch): Start and wait for Approval
+--------------------------------------------------------------------------------
+Action: Start and wait for an approval (Approvals connector)
+  Approval type:    Approve/Reject — First to respond
+  Title:            CPOR Registration Approval Required —
+                    @{triggerOutputs()?['body/cpor_name']}
+  Assigned to:      @{outputs('Get_TerritoryManager')?['body/internalemailaddress']}
+  Details:
+    Legislation:    @{triggerOutputs()?['body/cpor_legislationname']}
+    Territory:      @{outputs('Get_Territory')?['body/name']}
+    Risk Rating:    @{triggerOutputs()?['body/cpor_riskrating']}
+    Mandatory:      @{triggerOutputs()?['body/cpor_ismandatory']}
+    Applicability:  @{triggerOutputs()?['body/cpor_applicabilityrule']}
+    Legislation URL:@{triggerOutputs()?['body/cpor_legislationurl']}
+
+    Please review and approve or reject this regulatory registration.
+    Record link: @{concat(outputs('Get_OrgUrl'), '/main.aspx?etn=cpor_regulatoryregistration&id=',
+      triggerOutputs()?['body/cpor_regulatoryregistrationid'], '&pagetype=entityrecord')}
+
+  Item link:    (compose the D365 record link as above)
+  Item link description: Open Registration Record
+
+NOTE: The Approvals connector requires Power Automate Premium. The approval
+  email is sent from Power Automate; the TM clicks Approve or Reject directly
+  in the email or in the Power Automate mobile app.
+
+NOTE ON TIMEOUT: By default, Start and wait for an approval does not timeout.
+  For production, consider wrapping in a Parallel branch with a Delay of 7 days
+  and a reminder / escalation to the CPOR team if no response is received.
+
+--------------------------------------------------------------------------------
+STEP 6a (Approved branch): Activate the record
+--------------------------------------------------------------------------------
+Action: Condition
+  Condition: outputs('Start_and_wait_for_an_approval')?['body/outcome']
+             Equals   'Approve'
+
+True branch (Approved):
+
+  Action: Update a row (Dataverse connector)
+    Table Name:  cpor_regulatoryregistrations
+    Row ID:      @{triggerOutputs()?['body/cpor_regulatoryregistrationid']}
+    cpor_registrationstatus:   154080000   (Active)
+    cpor_approvaldate:         @{utcNow('yyyy-MM-dd')}
+    cpor_lastverifieddate:     @{utcNow('yyyy-MM-dd')}
+    cpor_approvedby@odata.bind: /systemusers(@{outputs('Get_TerritoryManager')
+                                  ?['body/systemuserid']})
+
+  Action: Perform a bound action (Dataverse connector) — advance BPF to Stage 5
+    Table Name:   cpor_regulatoryregistrations
+    Row ID:       @{triggerOutputs()?['body/cpor_regulatoryregistrationid']}
+    Action Name:  SetProcessStage
+    processstageid: <GUID of Stage 5 — Activated>
+                    (retrieve via GET /processstages?$filter=stagename
+                     eq 'Activated'&$select=processstageid after BPF deploy)
+
+  Action: Send confirmation notification to CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET
+    Subject: CPOR Registration Activated —
+             @{triggerOutputs()?['body/cpor_name']}
+    Body:    Approved by @{outputs('Get_TerritoryManager')?['body/fullname']}
+             on @{utcNow('yyyy-MM-dd')}. Record is now Active and available
+             for pipeline grounding.
+
+--------------------------------------------------------------------------------
+STEP 6b (Rejected branch): Return to Pending at Stage 3
+--------------------------------------------------------------------------------
+False branch (Rejected):
+
+  Action: Update a row (Dataverse connector)
+    Table Name:  cpor_regulatoryregistrations
+    Row ID:      @{triggerOutputs()?['body/cpor_regulatoryregistrationid']}
+    cpor_registrationstatus: 154080002   (Pending)
+    cpor_analystnotes: concat(
+      coalesce(triggerOutputs()?['body/cpor_analystnotes'], ''),
+      ' [TM Rejection ', utcNow('yyyy-MM-dd'), ' by ',
+      outputs('Get_TerritoryManager')?['body/fullname'], '] ',
+      outputs('Start_and_wait_for_an_approval')?['body/responses'][0]['comments'])
+
+  Action: Perform a bound action (Dataverse connector) — return BPF to Stage 3
+    Table Name:   cpor_regulatoryregistrations
+    Row ID:       @{triggerOutputs()?['body/cpor_regulatoryregistrationid']}
+    Action Name:  SetProcessStage
+    processstageid: <GUID of Stage 3 — Legislation Verification>
+
+  Action: Send rejection notification to CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET
+    Subject: CPOR Registration Rejected —
+             @{triggerOutputs()?['body/cpor_name']}
+    Body:    Rejected by @{outputs('Get_TerritoryManager')?['body/fullname']}
+             on @{utcNow('yyyy-MM-dd')}.
+
+             TM Comments: @{outputs('Start_and_wait_for_an_approval')
+                            ?['body/responses'][0]['comments']}
+
+             The registration has been returned to Pending — Legislation
+             Verification (Stage 3). Review the rejection comments and
+             update the record before resubmitting for TM approval.
+
+--------------------------------------------------------------------------------
+FLOW ACTIVATION
+--------------------------------------------------------------------------------
+Save and turn on the flow.
+
+NOTE: This flow triggers on ALL cpor_registrationstatus changes, not just
+154080003. Step 1's condition exits immediately for any other value. The
+performance impact is negligible.
+
+--------------------------------------------------------------------------------
+VERIFICATION
+--------------------------------------------------------------------------------
+1. Create a test registration and manually set cpor_registrationstatus to
+   154080003 (Pending TM Review) via the CPOR Industry Catalog form.
+2. Wait 30-60 seconds for the flow to trigger.
+3. Confirm the TM (territory.managerid) receives an approval email.
+4. Click Approve in the email.
+5. Wait 30-60 seconds for the flow to complete the approval branch.
+6. Refresh the registration record.
+7. Confirm:
+   - cpor_registrationstatus = Active (154080000)
+   - cpor_approvedby = Territory Manager user
+   - cpor_approvaldate = today
+   - cpor_lastverifieddate = today
+   - BPF is at Stage 5 (Activated)
+8. Repeat test with Reject. Confirm:
+   - cpor_registrationstatus = Pending (154080002)
+   - cpor_analystnotes contains the TM rejection comment
+   - BPF is at Stage 3 (Legislation Verification)
+   - Global Industry Team receives rejection notification email.

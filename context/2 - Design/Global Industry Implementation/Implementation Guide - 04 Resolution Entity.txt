@@ -118,10 +118,19 @@ cpor_riskrating          Risk Rating           Choice         None      Options:
                                                                          High/Medium/Low
                                                                          Feeds regulatoryExposure
                                                                          score in Stage 7.
-cpor_status              Status                Text (20)      None      Values: Active, Superseded,
-                                                                         Pending. Free text.
+cpor_registrationstatus  Registration Status   Choice         None      Options: cpor_registrationstatus
+                                                                         Active (154080000)
+                                                                         Superseded (154080001)
+                                                                         Pending (154080002)
+                                                                         Pending TM Review (154080003)
+                                                                         Default: Pending (154080002).
                                                                          Stage 0 filters: Active only.
-                                                                         Future: convert to optionset.
+                                                                         Replaces cpor_status (text).
+                                                                         See Guide 01 Optionset 8.
+cpor_status              Status (DEPRECATED)   Text (20)      None      DEPRECATED. Retain for one
+                                                                         release cycle for migration.
+                                                                         Do not use on new records.
+                                                                         Replaced by cpor_registrationstatus.
 
 ================================================================================
 FIELDS — DATES
@@ -154,8 +163,37 @@ cpor_owner               Record Owner (Text)   Text (200)     None      Name of 
                                                                          for maintaining this record.
                                                                          Separate from Dataverse
                                                                          OwnerId system field.
-cpor_notes               Notes                 Text Area(2000) None     Free-form analyst notes,
-                                                                         exceptions, caveats.
+cpor_analystnotes        Analyst Notes         Text Area(2000) None     Free-form analyst notes,
+                                                                         exceptions, caveats, and
+                                                                         re-verification context.
+                                                                         Remains editable even when
+                                                                         record is Superseded.
+                                                                         (Previously: cpor_notes —
+                                                                         renamed for clarity.)
+cpor_notes               Notes (DEPRECATED)    Text Area(2000) None     DEPRECATED. Use
+                                                                         cpor_analystnotes instead.
+                                                                         Retained for migration only.
+
+================================================================================
+FIELDS — TERRITORY MANAGER APPROVAL
+================================================================================
+
+Field Name               Display Name          Type           Required  Notes
+-----------------------  --------------------  -------------  --------  ---------------------------
+cpor_approvedby          Approved By           Lookup         None      → systemuser (OOB)
+                                                                         Territory Manager who
+                                                                         completed BPF Stage 4.
+                                                                         Cascade Delete: RemoveLink.
+                                                                         Stamped by Flow 4 on
+                                                                         TM approval.
+cpor_approvaldate        Approval Date         Date Only      None      Date Stage 4 approval
+                                                                         was granted. Stamped by
+                                                                         Flow 4 on TM approval.
+                                                                         Distinct from
+                                                                         cpor_lastverifieddate
+                                                                         (which tracks analytical
+                                                                         verification, not BPF
+                                                                         approval).
 
 ================================================================================
 DUPLICATE DETECTION RULE
@@ -186,7 +224,7 @@ referenceResolver.js builds candidateRegulations[] using:
     ?$filter=
       _cpor_industrycodeid_value eq '{industryCodeGuid}'
       and ({territoryFilter})
-      and cpor_status eq 'Active'
+      and cpor_registrationstatus eq 154080000
       and cpor_lastverifieddate ge {freshnessCutoff}
     &$expand=
       cpor_compliancedomainid($select=cpor_domaincode,cpor_name),
@@ -254,7 +292,7 @@ Record 1:
   cpor_legislationname: General Data Protection Regulation
   cpor_mandatory:       Yes
   cpor_riskrating:      High (154080000)
-  cpor_status:          Active
+  cpor_registrationstatus: Active (154080000)
   cpor_lastverifieddate: (today's date)
 
 Record 2:
@@ -266,7 +304,7 @@ Record 2:
   cpor_legislationname: ISO/IEC 27001:2022 Information Security Management
   cpor_mandatory:       No
   cpor_riskrating:      Medium (154080001)
-  cpor_status:          Active
+  cpor_registrationstatus: Active (154080000)
   cpor_lastverifieddate: (today's date)
 
 Record 3:
@@ -278,7 +316,7 @@ Record 3:
   cpor_legislationname: Digital Operational Resilience Act
   cpor_mandatory:       Yes
   cpor_riskrating:      High (154080000)
-  cpor_status:          Active
+  cpor_registrationstatus: Active (154080000)
   cpor_compliancedeadline: 2025-01-17
   cpor_lastverifieddate: (today's date)
 
@@ -291,7 +329,7 @@ Record 4:
   cpor_legislationname: Health Insurance Portability and Accountability Act - Security Rule
   cpor_mandatory:       Yes
   cpor_riskrating:      High (154080000)
-  cpor_status:          Active
+  cpor_registrationstatus: Active (154080000)
   cpor_lastverifieddate: (today's date)
 
 ================================================================================

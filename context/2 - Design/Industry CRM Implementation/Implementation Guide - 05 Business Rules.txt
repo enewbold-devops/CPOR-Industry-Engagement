@@ -76,12 +76,11 @@ ACTION: Disable (lock) the following fields:
 
 FIELD THAT REMAINS EDITABLE (NOT in the disable list):
   cpor_analystnotes   ← analyst can still document why the record was superseded
-  cpor_status         ← must remain editable so analyst can reactivate if needed
+  cpor_registrationstatus  ← must remain editable so analyst can reactivate if needed
 
-NOTE ON cpor_status: Leaving cpor_status editable for Superseded records is
-intentional. An analyst may need to reactivate a record if a regulation is
-re-enacted. If cpor_status were locked, they would be unable to do so from
-the form.
+NOTE ON cpor_registrationstatus: Leaving cpor_registrationstatus editable for
+Superseded records is intentional. An analyst may need to reactivate a record
+if a regulation is re-enacted.
 
 PORTAL STEPS
 ------------
@@ -94,15 +93,10 @@ PORTAL STEPS
 5. In the Condition panel:
    Select the condition box and configure:
      Entity:     cpor_RegulatoryRegistration (current record)
-     Field:      cpor_status (Status)
+     Field:      cpor_registrationstatus (Registration Status)
      Operator:   Equals
      Type:       Value
-     Value:      Superseded
-
-   NOTE: Because cpor_status is a free-text field, type "Superseded" exactly
-   (capital S). The condition performs a case-sensitive string comparison.
-   If the field is later converted to an optionset, this condition must be
-   updated to use the optionset integer value.
+     Value:      Superseded (select from the Choice dropdown — integer 154080001)
 
 6. In the Action panel (True branch):
    For each field in the "disable" list above:
@@ -140,15 +134,15 @@ PORTAL STEPS
 VERIFICATION
 ------------
 1. Open an Active cpor_RegulatoryRegistration record.
-   Change cpor_status to "Superseded" (type in the field).
+   Change cpor_registrationstatus to "Superseded".
    Confirm all fields in the disable list immediately become read-only.
    Confirm cpor_analystnotes remains editable.
-   Confirm cpor_status itself remains editable.
+   Confirm cpor_registrationstatus itself remains editable.
 
-2. Change cpor_status back to "Active".
+2. Change cpor_registrationstatus back to "Active".
    Confirm all locked fields return to editable state.
 
-3. Open a record already saved with cpor_status = "Superseded".
+3. Open a record already saved with cpor_registrationstatus = "Superseded".
    Confirm the lock is applied on form load (not just on field change).
 
 

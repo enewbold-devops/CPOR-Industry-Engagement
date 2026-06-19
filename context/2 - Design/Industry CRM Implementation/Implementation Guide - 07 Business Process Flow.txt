@@ -1,0 +1,420 @@
+================================================================================
+CPOR DURABLE — INDUSTRY CRM IMPLEMENTATION
+Implementation Guide 07: Business Process Flow — Registration Qualification
+Date: 2026-06-18
+================================================================================
+
+PURPOSE
+-------
+Define the "CPOR — Registration Qualification" Business Process Flow (BPF)
+on cpor_RegulatoryRegistration. The BPF enforces an ordered, stage-gated
+intake process for every new regulatory registration and governs the
+re-verification lifecycle for stale records.
+
+Five stages:
+  Stage 1 — Draft                 (Global Industry Team)
+  Stage 2 — Taxonomy Validation   (Global Industry Team)
+  Stage 3 — Legislation Verification  (Global Industry Team) ← re-entry point
+  Stage 4 — Territory Approval    (Territory Manager)
+  Stage 5 — Activated             (System — terminal)
+
+PREREQUISITE
+------------
+  GII Guides 00-07 and CRM Guides 00-06 fully deployed.
+  cpor_registrationstatus optionset (Guide 01 Optionset 8) deployed.
+  cpor_approvedby, cpor_approvaldate, cpor_analystnotes fields deployed
+    (GII Guide 04 Part B).
+  territory.managerid populated for all territories that have registered
+    regulations. BPF Stage 4 routing will fail otherwise.
+  Flow 4 (CRM Guide 06) deployed and Active before enabling this BPF.
+
+ENTITY PREREQUISITE
+-------------------
+  cpor_RegulatoryRegistration currently has IsBusinessProcessEnabled = false.
+  Before creating the BPF, enable business process flows on the entity:
+    In make.powerapps.com, open the CPOR solution.
+    Navigate to Objects > Tables > cpor_RegulatoryRegistration.
+    Select Settings (gear icon or Properties).
+    Under "Business rules and business process flows", enable
+    "Business process flows" checkbox.
+    Save the table settings.
+  This sets IsBusinessProcessEnabled = true on the entity.
+
+BPF NAME:         CPOR — Registration Qualification
+TABLE:            cpor_RegulatoryRegistration
+CATEGORY:         Business process flow
+UNIQUE NAME:      cpor_RegistrationQualification
+
+
+================================================================================
+CREATING THE BPF
+================================================================================
+
+1. In make.powerapps.com, open the CPOR solution.
+2. Select Objects > Cloud flows — OR navigate via
+   Make > Business process flows.
+3. Select + New > Business process flow from the command bar.
+4. In the New business process flow dialog:
+     Name:   CPOR — Registration Qualification
+     Table:  Regulatory Registration (cpor_regulatoryregistration)
+   Select Create.
+   The BPF designer opens with a default Stage 1.
+
+5. Build the 5 stages as specified below.
+6. Select Save, then Activate.
+7. Confirm the BPF appears on the cpor_RegulatoryRegistration Main form
+   as a process bar at the top of the record.
+
+
+================================================================================
+STAGE 1: Draft
+================================================================================
+
+STAGE NAME:   Draft
+CATEGORY:     (none required)
+OWNER:        Global Industry Team
+
+PURPOSE: Initial record intake. Captures the minimum identity fields for
+a new regulation before taxonomy assignment.
+
+STEP FIELDS (marked Business Required in the BPF — required to advance):
+  Step 1:  cpor_name               (Name — primary field)
+  Step 2:  cpor_legislationname    (Legislation Name)
+  Step 3:  cpor_legaltype          (Legal Type — Choice field)
+
+OPTIONAL STEPS (prompted but not required to advance):
+  Step 4:  cpor_regulatorbodyname  (Regulator / Body Name)
+  Step 5:  cpor_regulatortype      (Regulator Type)
+
+ENTRY ACTION (set on Stage 1 entry):
+  In the stage properties > Other > "Stage Category" set to (none).
+  BPF entry action (executed when a new record's BPF process is initiated):
+    No connector action available for stage entry in standard BPF.
+    Instead: ensure the cpor_registrationstatus field default value is
+    set to 154080002 (Pending) on the entity level (column default).
+    New records enter Stage 1 with cpor_registrationstatus = Pending by default.
+
+PORTAL STEPS FOR STAGE 1:
+  In the BPF designer, the default Stage 1 appears.
+  Select the stage header to rename it "Draft".
+  Select + Add steps and add the step fields listed above.
+  For required steps: check "Required" on each step.
+  For optional steps: add as "Data step" without marking required.
+
+
+================================================================================
+STAGE 2: Taxonomy Validation
+================================================================================
+
+STAGE NAME:   Taxonomy Validation
+CATEGORY:     (none required)
+OWNER:        Global Industry Team
+
+PURPOSE: Confirms the three required FK anchors that ground the registration
+in the catalog. Also surfaces related entity context so the analyst can
+verify consistency with the crosswalk before advancing.
+
+STEP FIELDS (Business Required — required to advance):
+  Step 1:  cpor_industrycodeid    (Industry Code — Lookup to cpor_IndustryCode)
+  Step 2:  cpor_territoryid       (Territory — Lookup to territory)
+  Step 3:  cpor_compliancedomainid (Compliance Domain — Lookup to cpor_ComplianceDomain)
+
+OPTIONAL STEP:
+  Step 4:  cpor_regulatorysourceid (Regulatory Source — optional Lookup)
+
+RELATED ENTITY CONTEXT — embedded sub-grids / quick views in Stage 2 panel:
+  The BPF stage panel supports embedding quick view forms and sub-grids.
+  Add the following to the Stage 2 panel body section in the form editor
+  (not the BPF designer itself — add to the Main form's Section 1 as
+  collapsible context panels):
+
+  a) Industry Domain Map context (under cpor_industrycodeid):
+     Sub-grid: cpor_IndustryDomainMap
+     Filter:   _cpor_industrycodeid_value eq {cpor_industrycodeid value}
+     Columns:  cpor_ComplianceDomain.cpor_name, cpor_implementationpriority
+     Purpose:  Shows which compliance domains are mapped to this industry code
+               so the analyst can confirm cpor_compliancedomainid aligns with
+               the established crosswalk.
+
+  b) Territory Source Map context (under cpor_territoryid):
+     Sub-grid: cpor_TerritorySourceMap
+     Filter:   _cpor_territoryid_value eq {cpor_territoryid value}
+     Columns:  cpor_RegulatorySource.cpor_name, cpor_RegulatorySource.cpor_sourceurl
+     Purpose:  Shows authoritative research sources for this territory so
+               the analyst can verify the legislation URL before advancing.
+
+  c) Existing Active registrations for same territory + domain:
+     Sub-grid: cpor_RegulatoryRegistration (self-referencing view)
+     Filter:   _cpor_territoryid_value eq {cpor_territoryid value}
+               AND _cpor_compliancedomainid_value eq {cpor_compliancedomainid value}
+               AND cpor_registrationstatus eq 154080000
+     Columns:  cpor_name, cpor_legislationname, cpor_riskrating
+     Purpose:  Duplicate check — analyst can confirm this is not a duplicate
+               before the BPF duplicate detection rule fires on save.
+
+TERRITORY MANAGER CHECK — BPF Stage Validation:
+  Before advancing to Stage 3, add a Business Rule on the form (or instruct
+  analysts) to verify territory.managerid is populated on the selected territory.
+  The BPF itself cannot query a related entity's field as a step requirement,
+  so this validation is handled by:
+    a) A Business Rule on the form that reads the territory lookup's related
+       managerid field via a quick view and shows an error message if null.
+    b) Flow 4 includes a fallback guard (Step 3) that catches missing managers
+       and reverts the record rather than failing silently.
+  Display warning on Stage 2 panel: "Ensure the selected territory has a
+  Territory Manager assigned before advancing to Stage 3. Open the territory
+  record and set the Manager field if it is empty."
+
+PORTAL STEPS FOR STAGE 2:
+  In the BPF designer, select + New stage after Stage 1. Name it "Taxonomy Validation".
+  Add the step fields listed above. Mark Steps 1-3 as Required.
+  Add Step 4 as optional (Data step, not required).
+
+
+================================================================================
+STAGE 3: Legislation Verification
+================================================================================
+
+STAGE NAME:   Legislation Verification
+CATEGORY:     (none required)
+OWNER:        Global Industry Team
+RE-VERIFICATION RE-ENTRY POINT: Flow 1 returns stale records to this stage.
+
+PURPOSE: Verifies the legislative substance and risk classification.
+Confirming these fields stamps cpor_lastverifieddate and prepares the record
+for Territory Manager sign-off.
+
+STEP FIELDS (Business Required — required to advance):
+  Step 1:  cpor_legislationurl       (Legislation URL)
+  Step 2:  cpor_riskrating           (Risk Rating)
+  Step 3:  cpor_mandatory            (Mandatory — Two Options)
+  Step 4:  cpor_lastverifieddate     (Last Verified Date — analyst stamps today)
+
+OPTIONAL STEPS:
+  Step 5:  cpor_applicabilityrule    (Applicability Rule)
+  Step 6:  cpor_effectivedate        (Effective Date)
+  Step 7:  cpor_compliancedeadline   (Compliance Deadline)
+
+QUICK VIEW — Regulatory Source (in Stage 3 panel context):
+  Quick View form for cpor_RegulatorySource linked via cpor_regulatorysourceid.
+  Fields displayed: cpor_name, cpor_sourceurl, cpor_sourcetype, cpor_sourceregion.
+  Purpose: Analyst confirms the source URL matches the legislation URL before
+           marking cpor_lastverifieddate = today.
+
+RE-VERIFICATION PATH:
+  When Flow 1 moves a stale record to this stage, the analyst finds the record
+  at Stage 3 with cpor_registrationstatus = Pending. Steps 1-4 are highlighted
+  as the fields that need re-confirmation. The analyst updates any changed fields,
+  sets cpor_lastverifieddate to today, and advances to Stage 4.
+  Stages 1 and 2 are NOT revisited on re-verification unless the taxonomy
+  anchors themselves have changed (in which case the analyst should manually
+  move the BPF back to Stage 2 from the process bar).
+
+PORTAL STEPS FOR STAGE 3:
+  Add + New stage after Stage 2. Name it "Legislation Verification".
+  Add step fields as listed. Mark Steps 1-4 as Required.
+
+
+================================================================================
+STAGE 4: Territory Approval
+================================================================================
+
+STAGE NAME:   Territory Approval
+CATEGORY:     Approver (conceptual — no native BPF category for approval)
+OWNER:        Territory Manager (territory.managerid on cpor_territoryid)
+
+PURPOSE: The Territory Manager for the registration's jurisdiction performs
+final sign-off. This is the quality gate that activates the record for
+pipeline grounding.
+
+STEP FIELDS (Business Required — required to advance):
+  Step 1:  cpor_approvedby     (Approved By — Lookup to systemuser)
+  Step 2:  cpor_approvaldate   (Approval Date)
+
+OPTIONAL STEP:
+  Step 3:  cpor_analystnotes   (Analyst Notes — TM can add jurisdiction caveats)
+
+ENTRY ACTION — how Stage 4 entry triggers Flow 4:
+  When the analyst advances the BPF to Stage 4 (clicks the Stage 4 header
+  or the Next button in the process bar), add a workflow step or use an
+  automated cloud flow triggered on stage entry. The recommended approach:
+
+  On Stage 4 entry — analyst manually sets:
+    cpor_registrationstatus = Pending TM Review (154080003)
+    (via a command bar button, a BPF action step, or a Business Rule
+     that fires when the process stage reaches Stage 4)
+
+  IMPLEMENTATION NOTE: Standard BPFs do not natively support "on stage entry"
+  flow triggers. The recommended approach for this release:
+    a) Add a BPF Action Step in Stage 4 using an instant flow that sets
+       cpor_registrationstatus = 154080003 and notifies the analyst to save.
+    b) OR: instruct the analyst that advancing to Stage 4 requires setting
+       cpor_registrationstatus to "Pending TM Review" via the form field.
+       Business Rule 3 (optional, future) can auto-set this on stage change.
+    c) Flow 4 trigger condition (cpor_registrationstatus eq 154080003)
+       fires regardless of how the value is set — manually or via action step.
+
+PORTAL STEPS FOR STAGE 4:
+  Add + New stage after Stage 3. Name it "Territory Approval".
+  Add step fields as listed. Mark Steps 1-2 as Required.
+  (Step 3 cpor_analystnotes is optional / informational.)
+  Consider adding a Stage 4 description visible to the TM:
+    "Confirm the legislation is current and applicable to this territory.
+     Set Approved By to yourself and enter today's date to complete approval."
+
+
+================================================================================
+STAGE 5: Activated
+================================================================================
+
+STAGE NAME:   Activated
+CATEGORY:     Finish
+OWNER:        System (Flow 4 advances to this stage on TM approval)
+
+PURPOSE: Terminal stage. Records in Stage 5 have completed the full
+qualification process and are Active in the pipeline.
+
+STEP FIELDS: None required.
+  Display-only confirmation fields (add as read-only data steps):
+  Step 1:  cpor_registrationstatus   (shows Active — 154080000)
+  Step 2:  cpor_approvedby           (shows approving TM)
+  Step 3:  cpor_approvaldate         (shows approval date)
+
+PORTAL STEPS FOR STAGE 5:
+  Add + New stage after Stage 4. Name it "Activated".
+  Set Stage Category to "Finish".
+  Add the display steps above as read-only data steps.
+
+
+================================================================================
+BPF FINISH CONFIGURATION
+================================================================================
+
+After building all 5 stages, configure the Finish step:
+  In the BPF designer, select the Finish button.
+  Set "On finish action": None (terminal state — record stays Active).
+
+Set the default view for new records:
+  When a new cpor_RegulatoryRegistration is created, the BPF should
+  auto-start at Stage 1. In the BPF designer, enable "Auto-populate
+  new records" if available for the entity.
+  Alternatively: the New Registration modal dialog (CRM Guide 08) creates
+  records programmatically; the BPF initialises automatically on record
+  creation if it is set as the default BPF for the entity.
+
+Set this as the default BPF for cpor_RegulatoryRegistration:
+  In make.powerapps.com > Solutions > CPOR > Business process flows,
+  find "CPOR — Registration Qualification" and set as Default.
+
+
+================================================================================
+PROCESS STAGE GUIDS (FILL IN AFTER DEPLOYMENT)
+================================================================================
+
+After deploying and activating the BPF, retrieve the Stage GUIDs for use
+in Flow 1 Step 7 and Flow 4 Steps 6a and 6b:
+
+  GET /processstages?$filter=processid/name eq 'CPOR — Registration Qualification'
+      &$select=stagename,processstageid
+
+Record the values here:
+
+  Stage 1 — Draft:                        processstageid = _______________
+  Stage 2 — Taxonomy Validation:          processstageid = _______________
+  Stage 3 — Legislation Verification:     processstageid = _______________  ← Flow 1 + Flow 4 rejection
+  Stage 4 — Territory Approval:           processstageid = _______________
+  Stage 5 — Activated:                    processstageid = _______________  ← Flow 4 approval
+
+Update the hardcoded GUIDs in Flow 1 Step 7b and Flow 4 Steps 6a/6b with
+the values above before putting the flows into production.
+
+
+================================================================================
+RE-VERIFICATION WORKFLOW SUMMARY
+================================================================================
+
+A registration that has been Active and becomes stale (> 180 days since
+cpor_lastverifieddate) is re-processed as follows:
+
+  1. Flow 1 (Monday weekly run) detects the stale record.
+  2. Flow 1 sends the stale digest notification to the Global Industry Team.
+  3. Flow 1 sets cpor_registrationstatus = Pending (154080002).
+  4. Flow 1 calls SetProcessStage → Stage 3 (Legislation Verification).
+  5. An analyst opens the record (now at Stage 3, status Pending).
+  6. Analyst reviews and updates legislation details, re-stamps
+     cpor_lastverifieddate = today, advances BPF to Stage 4.
+  7. BPF Stage 4 entry — analyst sets cpor_registrationstatus = 154080003.
+  8. Flow 4 triggers — routes approval to Territory Manager.
+  9. TM approves → record returns to Active, Stage 5.
+
+Stages 1 and 2 (Draft, Taxonomy Validation) are skipped for re-verification.
+The taxonomy anchors are assumed correct unless the analyst explicitly
+moves the BPF back to Stage 2 for correction.
+
+
+================================================================================
+SECURITY ROLE ASSIGNMENTS
+================================================================================
+
+Who can interact with the BPF stages:
+
+  Stage 1-3:  CPOR Global Industry Team role
+              Analysts can advance through Stages 1, 2, 3.
+              Territory Managers should NOT be able to modify Stages 1-3.
+
+  Stage 4:    Territory Managers receive the Flow 4 approval request by email.
+              They do NOT need direct access to the CPOR Industry Catalog app
+              for the approval — the Power Automate Approvals email is sufficient.
+              If Territory Managers need form access (to view the record before
+              approving), grant them a restricted Read + limited Write role on
+              cpor_RegulatoryRegistration (Read Global + Write scoped to their
+              territory's records only — see Territory Manager role design in
+              session context).
+
+  Stage 5:    No user action. Flow 4 advances to Stage 5 automatically.
+              All roles can read Stage 5 records.
+
+
+================================================================================
+VERIFICATION
+================================================================================
+
+1. CREATE — New record created in CPOR Industry Catalog app:
+   Confirm BPF process bar appears at top of form with Stage 1 active.
+   Confirm cpor_registrationstatus = Pending on the new record.
+
+2. STAGE 1 → 2 — Fill cpor_name, cpor_legislationname, cpor_legaltype.
+   Click Next in process bar. Confirm Stage 2 activates.
+   Attempt to advance with empty required field — confirm error shown.
+
+3. STAGE 2 context panels — Select an Industry Code.
+   Confirm cpor_IndustryDomainMap sub-grid updates to show domain mappings.
+   Select a Territory. Confirm cpor_TerritorySourceMap sub-grid updates.
+   Select a territory with managerid = null. Confirm warning banner appears.
+
+4. STAGE 2 → 3 — Fill all required taxonomy fields. Advance to Stage 3.
+
+5. STAGE 3 → 4 — Fill cpor_legislationurl, cpor_riskrating, cpor_mandatory,
+   cpor_lastverifieddate = today. Advance. Set cpor_registrationstatus =
+   Pending TM Review. Confirm Flow 4 triggers (TM receives approval email).
+
+6. FLOW 4 APPROVAL — TM approves. Confirm:
+   - cpor_registrationstatus = Active
+   - cpor_approvedby = TM
+   - cpor_approvaldate = today
+   - BPF shows Stage 5 (Activated)
+
+7. FLOW 4 REJECTION — Repeat test, TM rejects with a comment. Confirm:
+   - cpor_registrationstatus = Pending
+   - cpor_analystnotes contains rejection comment
+   - BPF returns to Stage 3
+
+8. RE-VERIFICATION — Set a test Active record's cpor_lastverifieddate to
+   181 days ago. Run Flow 1 manually. Confirm:
+   - cpor_registrationstatus = Pending
+   - BPF is at Stage 3 (Legislation Verification)
+   - Stale digest notification received
+
+================================================================================
+END OF GUIDE 07
+================================================================================
