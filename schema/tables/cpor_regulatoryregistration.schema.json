@@ -1,5 +1,5 @@
 {
-  "@odata.context": "https://enewbold-sandbox.crm.dynamics.com/api/data/v9.2/$metadata#EntityDefinitions(Attributes())/$entity",
+  "@odata.context": "https://enewbold-sandbox.crm.dynamics.com/api/data/v9.2/$metadata#EntityDefinitions(Attributes(),ManyToOneRelationships(),OneToManyRelationships())/$entity",
   "MetadataId": "2e6c3877-7967-f111-ab0b-70a8a5b0076e",
   "HasChanged": null,
   "ActivityTypeMask": 0,
@@ -3921,6 +3921,336 @@
     },
     {
       "@odata.type": "#Microsoft.Dynamics.CRM.LookupAttributeMetadata",
+      "MetadataId": "048eef49-49b4-49fd-bbc5-56bc247dadaf",
+      "HasChanged": null,
+      "AttributeOf": null,
+      "AttributeType": "Lookup",
+      "ColumnNumber": 63,
+      "DeprecatedVersion": null,
+      "IntroducedVersion": "1.0.0.5",
+      "EntityLogicalName": "cpor_regulatoryregistration",
+      "IsCustomAttribute": true,
+      "IsPrimaryId": false,
+      "IsValidODataAttribute": true,
+      "IsPrimaryName": false,
+      "IsValidForCreate": true,
+      "IsValidForRead": true,
+      "IsValidForUpdate": true,
+      "CanBeSecuredForRead": true,
+      "CanBeSecuredForCreate": true,
+      "CanBeSecuredForUpdate": true,
+      "IsSecured": false,
+      "IsRetrievable": false,
+      "IsFilterable": false,
+      "IsSearchable": false,
+      "IsManaged": false,
+      "LinkedAttributeId": null,
+      "LogicalName": "cpor_verifiedby",
+      "IsValidForForm": true,
+      "IsRequiredForForm": false,
+      "IsValidForGrid": true,
+      "SchemaName": "cpor_VerifiedBy",
+      "ExternalName": null,
+      "IsLogical": false,
+      "IsDataSourceSecret": false,
+      "InheritsFrom": null,
+      "CreatedOn": "2026-06-19T03:12:32Z",
+      "ModifiedOn": "2026-06-19T03:12:32Z",
+      "SourceType": null,
+      "AutoNumberFormat": null,
+      "Targets": [
+        "systemuser"
+      ],
+      "Format": "None",
+      "AttributeTypeName": {
+        "Value": "LookupType"
+      },
+      "Description": {
+        "LocalizedLabels": [
+          {
+            "Label": "Regulatory Source approved and verified by Industry Team Lead or Territory Manager",
+            "LanguageCode": 1033,
+            "IsManaged": false,
+            "MetadataId": "e2018b4b-e500-46d3-ac49-f5a821da3109",
+            "HasChanged": null
+          }
+        ],
+        "UserLocalizedLabel": {
+          "Label": "Regulatory Source approved and verified by Industry Team Lead or Territory Manager",
+          "LanguageCode": 1033,
+          "IsManaged": false,
+          "MetadataId": "e2018b4b-e500-46d3-ac49-f5a821da3109",
+          "HasChanged": null
+        }
+      },
+      "DisplayName": {
+        "LocalizedLabels": [
+          {
+            "Label": "Verified By",
+            "LanguageCode": 1033,
+            "IsManaged": false,
+            "MetadataId": "c3263b56-d621-43fb-9c2d-4f64b0896ed9",
+            "HasChanged": null
+          }
+        ],
+        "UserLocalizedLabel": {
+          "Label": "Verified By",
+          "LanguageCode": 1033,
+          "IsManaged": false,
+          "MetadataId": "c3263b56-d621-43fb-9c2d-4f64b0896ed9",
+          "HasChanged": null
+        }
+      },
+      "IsAuditEnabled": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyauditsettings"
+      },
+      "IsGlobalFilterEnabled": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyglobalfiltersettings"
+      },
+      "IsSortableEnabled": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyissortablesettings"
+      },
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "IsRenameable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "isrenameable"
+      },
+      "IsValidForAdvancedFind": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifysearchsettings"
+      },
+      "RequiredLevel": {
+        "Value": "None",
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyrequirementlevelsettings"
+      },
+      "CanModifyAdditionalSettings": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyadditionalsettings"
+      },
+      "Settings": []
+    },
+    {
+      "@odata.type": "#Microsoft.Dynamics.CRM.StringAttributeMetadata",
+      "MetadataId": "fe1f6f3a-d0df-4eb9-9f5f-233ec796c532",
+      "HasChanged": null,
+      "AttributeOf": "cpor_verifiedby",
+      "AttributeType": "String",
+      "ColumnNumber": 64,
+      "DeprecatedVersion": null,
+      "IntroducedVersion": "1.0.0.5",
+      "EntityLogicalName": "cpor_regulatoryregistration",
+      "IsCustomAttribute": true,
+      "IsPrimaryId": false,
+      "IsValidODataAttribute": false,
+      "IsPrimaryName": false,
+      "IsValidForCreate": false,
+      "IsValidForRead": true,
+      "IsValidForUpdate": false,
+      "CanBeSecuredForRead": false,
+      "CanBeSecuredForCreate": false,
+      "CanBeSecuredForUpdate": false,
+      "IsSecured": false,
+      "IsRetrievable": false,
+      "IsFilterable": false,
+      "IsSearchable": false,
+      "IsManaged": false,
+      "LinkedAttributeId": null,
+      "LogicalName": "cpor_verifiedbyname",
+      "IsValidForForm": false,
+      "IsRequiredForForm": false,
+      "IsValidForGrid": false,
+      "SchemaName": "cpor_VerifiedByName",
+      "ExternalName": null,
+      "IsLogical": true,
+      "IsDataSourceSecret": false,
+      "InheritsFrom": null,
+      "CreatedOn": "2026-06-19T03:12:33Z",
+      "ModifiedOn": "2026-06-19T03:12:33Z",
+      "SourceType": 0,
+      "AutoNumberFormat": null,
+      "Format": "Text",
+      "ImeMode": "Auto",
+      "MaxLength": 200,
+      "YomiOf": null,
+      "IsLocalizable": false,
+      "DatabaseLength": 513,
+      "FormulaDefinition": "",
+      "SourceTypeMask": 0,
+      "AttributeTypeName": {
+        "Value": "StringType"
+      },
+      "Description": {
+        "LocalizedLabels": [],
+        "UserLocalizedLabel": null
+      },
+      "DisplayName": {
+        "LocalizedLabels": [],
+        "UserLocalizedLabel": null
+      },
+      "IsAuditEnabled": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyauditsettings"
+      },
+      "IsGlobalFilterEnabled": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyglobalfiltersettings"
+      },
+      "IsSortableEnabled": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyissortablesettings"
+      },
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "IsRenameable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "isrenameable"
+      },
+      "IsValidForAdvancedFind": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifysearchsettings"
+      },
+      "RequiredLevel": {
+        "Value": "None",
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyrequirementlevelsettings"
+      },
+      "CanModifyAdditionalSettings": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyadditionalsettings"
+      },
+      "Settings": [],
+      "FormatName": {
+        "Value": "Text"
+      }
+    },
+    {
+      "@odata.type": "#Microsoft.Dynamics.CRM.StringAttributeMetadata",
+      "MetadataId": "2a4c42f6-77de-43c0-9c5d-d427884fe434",
+      "HasChanged": null,
+      "AttributeOf": "cpor_verifiedby",
+      "AttributeType": "String",
+      "ColumnNumber": 65,
+      "DeprecatedVersion": null,
+      "IntroducedVersion": "1.0.0.5",
+      "EntityLogicalName": "cpor_regulatoryregistration",
+      "IsCustomAttribute": true,
+      "IsPrimaryId": false,
+      "IsValidODataAttribute": false,
+      "IsPrimaryName": false,
+      "IsValidForCreate": false,
+      "IsValidForRead": true,
+      "IsValidForUpdate": false,
+      "CanBeSecuredForRead": false,
+      "CanBeSecuredForCreate": false,
+      "CanBeSecuredForUpdate": false,
+      "IsSecured": false,
+      "IsRetrievable": false,
+      "IsFilterable": false,
+      "IsSearchable": false,
+      "IsManaged": false,
+      "LinkedAttributeId": null,
+      "LogicalName": "cpor_verifiedbyyominame",
+      "IsValidForForm": false,
+      "IsRequiredForForm": false,
+      "IsValidForGrid": false,
+      "SchemaName": "cpor_VerifiedByYomiName",
+      "ExternalName": null,
+      "IsLogical": true,
+      "IsDataSourceSecret": false,
+      "InheritsFrom": null,
+      "CreatedOn": "2026-06-19T03:12:33Z",
+      "ModifiedOn": "2026-06-19T03:12:33Z",
+      "SourceType": 0,
+      "AutoNumberFormat": null,
+      "Format": "Text",
+      "ImeMode": "Auto",
+      "MaxLength": 200,
+      "YomiOf": "cpor_verifiedbyname",
+      "IsLocalizable": false,
+      "DatabaseLength": 513,
+      "FormulaDefinition": "",
+      "SourceTypeMask": 0,
+      "AttributeTypeName": {
+        "Value": "StringType"
+      },
+      "Description": {
+        "LocalizedLabels": [],
+        "UserLocalizedLabel": null
+      },
+      "DisplayName": {
+        "LocalizedLabels": [],
+        "UserLocalizedLabel": null
+      },
+      "IsAuditEnabled": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyauditsettings"
+      },
+      "IsGlobalFilterEnabled": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyglobalfiltersettings"
+      },
+      "IsSortableEnabled": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyissortablesettings"
+      },
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "IsRenameable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "isrenameable"
+      },
+      "IsValidForAdvancedFind": {
+        "Value": false,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifysearchsettings"
+      },
+      "RequiredLevel": {
+        "Value": "None",
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyrequirementlevelsettings"
+      },
+      "CanModifyAdditionalSettings": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "canmodifyadditionalsettings"
+      },
+      "Settings": [],
+      "FormatName": {
+        "Value": "Text"
+      }
+    },
+    {
+      "@odata.type": "#Microsoft.Dynamics.CRM.LookupAttributeMetadata",
       "MetadataId": "7886fc0b-71f9-49ef-9532-5e17ff8a031c",
       "HasChanged": null,
       "AttributeOf": null,
@@ -7503,6 +7833,1306 @@
         "ManagedPropertyLogicalName": "canmodifyadditionalsettings"
       },
       "Settings": []
+    }
+  ],
+  "ManyToOneRelationships": [
+    {
+      "MetadataId": "4f6c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "lk_cpor_regulatoryregistration_createdby",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "systemuserid",
+      "ReferencedEntity": "systemuser",
+      "ReferencingAttribute": "createdby",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "lk_cpor_regulatoryregistration_createdby",
+      "ReferencingEntityNavigationPropertyName": "createdby",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "NoCascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "556c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "lk_cpor_regulatoryregistration_createdonbehalfby",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "systemuserid",
+      "ReferencedEntity": "systemuser",
+      "ReferencingAttribute": "createdonbehalfby",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "lk_cpor_regulatoryregistration_createdonbehalfby",
+      "ReferencingEntityNavigationPropertyName": "createdonbehalfby",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "NoCascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "5b6c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "lk_cpor_regulatoryregistration_modifiedby",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "systemuserid",
+      "ReferencedEntity": "systemuser",
+      "ReferencingAttribute": "modifiedby",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "lk_cpor_regulatoryregistration_modifiedby",
+      "ReferencingEntityNavigationPropertyName": "modifiedby",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "NoCascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "616c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "lk_cpor_regulatoryregistration_modifiedonbehalfby",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "systemuserid",
+      "ReferencedEntity": "systemuser",
+      "ReferencingAttribute": "modifiedonbehalfby",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "lk_cpor_regulatoryregistration_modifiedonbehalfby",
+      "ReferencingEntityNavigationPropertyName": "modifiedonbehalfby",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "NoCascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "736c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "user_cpor_regulatoryregistration",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "systemuserid",
+      "ReferencedEntity": "systemuser",
+      "ReferencingAttribute": "owninguser",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "user_cpor_regulatoryregistration",
+      "ReferencingEntityNavigationPropertyName": "owninguser",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "NoCascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "7a6c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "team_cpor_regulatoryregistration",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "teamid",
+      "ReferencedEntity": "team",
+      "ReferencingAttribute": "owningteam",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "team_cpor_regulatoryregistration",
+      "ReferencingEntityNavigationPropertyName": "owningteam",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "NoCascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "7f6c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "owner_cpor_regulatoryregistration",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "ownerid",
+      "ReferencedEntity": "owner",
+      "ReferencingAttribute": "ownerid",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "owner_cpor_regulatoryregistration",
+      "ReferencingEntityNavigationPropertyName": "ownerid",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "NoCascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "836c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": false,
+      "SchemaName": "business_unit_cpor_regulatoryregistration",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "businessunitid",
+      "ReferencedEntity": "businessunit",
+      "ReferencingAttribute": "owningbusinessunit",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "business_unit_cpor_regulatoryregistration",
+      "ReferencingEntityNavigationPropertyName": "owningbusinessunit",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "Restrict",
+        "Archive": "Restrict",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "f6af3870-0a68-f111-ab0e-00224805f249",
+      "HasChanged": null,
+      "IsCustomRelationship": true,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_IndustryCode_cpor_industrycode",
+      "SecurityTypes": "Append",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0.0.3",
+      "ReferencedAttribute": "cpor_industrycodeid",
+      "ReferencedEntity": "cpor_industrycode",
+      "ReferencingAttribute": "cpor_industrycode",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_IndustryCode_cpor_industrycode",
+      "ReferencingEntityNavigationPropertyName": "cpor_IndustryCode",
+      "RelationshipBehavior": 1,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "UseCollectionName",
+        "Group": "Details",
+        "Order": 10000,
+        "IsCustomizable": true,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "RemoveLink",
+        "Archive": "RemoveLink",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "2bac594a-0b68-f111-ab0e-00224805f249",
+      "HasChanged": null,
+      "IsCustomRelationship": true,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_Territory_territory",
+      "SecurityTypes": "Append",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0.0.3",
+      "ReferencedAttribute": "territoryid",
+      "ReferencedEntity": "territory",
+      "ReferencingAttribute": "cpor_territory",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_Territory_territory",
+      "ReferencingEntityNavigationPropertyName": "cpor_Territory",
+      "RelationshipBehavior": 1,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "UseCollectionName",
+        "Group": "Details",
+        "Order": 10000,
+        "IsCustomizable": true,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "RemoveLink",
+        "Archive": "RemoveLink",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "f1ae6864-0c68-f111-ab0e-00224805fccb",
+      "HasChanged": null,
+      "IsCustomRelationship": true,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_ComplianceDomain_cpor_compliancedomain",
+      "SecurityTypes": "Append",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0.0.3",
+      "ReferencedAttribute": "cpor_compliancedomainid",
+      "ReferencedEntity": "cpor_compliancedomain",
+      "ReferencingAttribute": "cpor_compliancedomain",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_ComplianceDomain_cpor_compliancedomain",
+      "ReferencingEntityNavigationPropertyName": "cpor_ComplianceDomain",
+      "RelationshipBehavior": 1,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "UseCollectionName",
+        "Group": "Details",
+        "Order": 10000,
+        "IsCustomizable": true,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "RemoveLink",
+        "Archive": "RemoveLink",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "33fe5c99-0c68-f111-ab0e-00224805f249",
+      "HasChanged": null,
+      "IsCustomRelationship": true,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_RegulatorySource_cpor_regulatorysource",
+      "SecurityTypes": "Append",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0.0.3",
+      "ReferencedAttribute": "cpor_regulatorysourceid",
+      "ReferencedEntity": "cpor_regulatorysource",
+      "ReferencingAttribute": "cpor_regulatorysource",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_RegulatorySource_cpor_regulatorysource",
+      "ReferencingEntityNavigationPropertyName": "cpor_RegulatorySource",
+      "RelationshipBehavior": 1,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "UseCollectionName",
+        "Group": "Details",
+        "Order": 10000,
+        "IsCustomizable": true,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "RemoveLink",
+        "Archive": "RemoveLink",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "759352b4-8c6b-f111-ab0e-00224805fccb",
+      "HasChanged": null,
+      "IsCustomRelationship": true,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_VerifiedBy_systemuser",
+      "SecurityTypes": "Append",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0.0.5",
+      "ReferencedAttribute": "systemuserid",
+      "ReferencedEntity": "systemuser",
+      "ReferencingAttribute": "cpor_verifiedby",
+      "ReferencingEntity": "cpor_regulatoryregistration",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_VerifiedBy_systemuser",
+      "ReferencingEntityNavigationPropertyName": "cpor_VerifiedBy",
+      "RelationshipBehavior": 1,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "UseCollectionName",
+        "Group": "Details",
+        "Order": 10000,
+        "IsCustomizable": true,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "RemoveLink",
+        "Archive": "RemoveLink",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    }
+  ],
+  "OneToManyRelationships": [
+    {
+      "MetadataId": "a56c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_SyncErrors",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "cpor_regulatoryregistrationid",
+      "ReferencedEntity": "cpor_regulatoryregistration",
+      "ReferencingAttribute": "regardingobjectid",
+      "ReferencingEntity": "syncerror",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_SyncErrors",
+      "ReferencingEntityNavigationPropertyName": "regardingobjectid_cpor_regulatoryregistration",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "Cascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "a96c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_AsyncOperations",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "cpor_regulatoryregistrationid",
+      "ReferencedEntity": "cpor_regulatoryregistration",
+      "ReferencingAttribute": "regardingobjectid",
+      "ReferencingEntity": "asyncoperation",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_AsyncOperations",
+      "ReferencingEntityNavigationPropertyName": "regardingobjectid_cpor_regulatoryregistration",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "NoCascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "ad6c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_MailboxTrackingFolders",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "cpor_regulatoryregistrationid",
+      "ReferencedEntity": "cpor_regulatoryregistration",
+      "ReferencingAttribute": "regardingobjectid",
+      "ReferencingEntity": "mailboxtrackingfolder",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_MailboxTrackingFolders",
+      "ReferencingEntityNavigationPropertyName": "regardingobjectid_cpor_regulatoryregistration",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "Cascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "b16c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_UserEntityInstanceDatas",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "cpor_regulatoryregistrationid",
+      "ReferencedEntity": "cpor_regulatoryregistration",
+      "ReferencingAttribute": "objectid",
+      "ReferencingEntity": "userentityinstancedata",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_UserEntityInstanceDatas",
+      "ReferencingEntityNavigationPropertyName": "objectid_cpor_regulatoryregistration",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "Cascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "b56c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_ProcessSession",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "cpor_regulatoryregistrationid",
+      "ReferencedEntity": "cpor_regulatoryregistration",
+      "ReferencingAttribute": "regardingobjectid",
+      "ReferencingEntity": "processsession",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_ProcessSession",
+      "ReferencingEntityNavigationPropertyName": "regardingobjectid_cpor_regulatoryregistration",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "NoCascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "b96c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": false,
+      "SchemaName": "cpor_regulatoryregistration_BulkDeleteFailures",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "cpor_regulatoryregistrationid",
+      "ReferencedEntity": "cpor_regulatoryregistration",
+      "ReferencingAttribute": "regardingobjectid",
+      "ReferencingEntity": "bulkdeletefailure",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_BulkDeleteFailures",
+      "ReferencingEntityNavigationPropertyName": "regardingobjectid_cpor_regulatoryregistration",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "Cascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "bd6c3877-7967-f111-ab0b-70a8a5b0076e",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": false,
+      "SchemaName": "cpor_regulatoryregistration_PrincipalObjectAttributeAccesses",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "cpor_regulatoryregistrationid",
+      "ReferencedEntity": "cpor_regulatoryregistration",
+      "ReferencingAttribute": "objectid",
+      "ReferencingEntity": "principalobjectattributeaccess",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_PrincipalObjectAttributeAccesses",
+      "ReferencingEntityNavigationPropertyName": "objectid_cpor_regulatoryregistration",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "Cascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "433c9980-0a68-f111-ab0e-7ced8d6f2989",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_connections1",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "cpor_regulatoryregistrationid",
+      "ReferencedEntity": "cpor_regulatoryregistration",
+      "ReferencingAttribute": "record1id",
+      "ReferencingEntity": "connection",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_connections1",
+      "ReferencingEntityNavigationPropertyName": "record1id_cpor_regulatoryregistration",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "UseCollectionName",
+        "Group": "Details",
+        "Order": 100,
+        "IsCustomizable": true,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "Cascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "473c9980-0a68-f111-ab0e-7ced8d6f2989",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_connections2",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "cpor_regulatoryregistrationid",
+      "ReferencedEntity": "cpor_regulatoryregistration",
+      "ReferencingAttribute": "record2id",
+      "ReferencingEntity": "connection",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_connections2",
+      "ReferencingEntityNavigationPropertyName": "record2id_cpor_regulatoryregistration",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "Cascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "13cb49a8-0a68-f111-ab0e-7ced8d3bba3a",
+      "HasChanged": null,
+      "IsCustomRelationship": false,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_regulatoryregistration_DeletedItemReferences",
+      "SecurityTypes": "None",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0",
+      "ReferencedAttribute": "cpor_regulatoryregistrationid",
+      "ReferencedEntity": "cpor_regulatoryregistration",
+      "ReferencingAttribute": "deletedobject",
+      "ReferencingEntity": "deleteditemreference",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_regulatoryregistration_DeletedItemReferences",
+      "ReferencingEntityNavigationPropertyName": "deletedobject_cpor_regulatoryregistration",
+      "RelationshipBehavior": 0,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "DoNotDisplay",
+        "Group": "Details",
+        "Order": null,
+        "IsCustomizable": false,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "NoCascade",
+        "Archive": "NoCascade",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
+    },
+    {
+      "MetadataId": "7ef84326-1068-f111-ab0e-00224805fccb",
+      "HasChanged": null,
+      "IsCustomRelationship": true,
+      "IsValidForAdvancedFind": true,
+      "SchemaName": "cpor_hypothesis_RegulatoryRegistration_cpor_regulatoryregistration",
+      "SecurityTypes": "Append",
+      "IsManaged": false,
+      "RelationshipType": "OneToManyRelationship",
+      "IntroducedVersion": "1.0.0.3",
+      "ReferencedAttribute": "cpor_regulatoryregistrationid",
+      "ReferencedEntity": "cpor_regulatoryregistration",
+      "ReferencingAttribute": "cpor_regulatoryregistration",
+      "ReferencingEntity": "cpor_hypothesis",
+      "IsHierarchical": false,
+      "EntityKey": null,
+      "IsRelationshipAttributeDenormalized": false,
+      "ReferencedEntityNavigationPropertyName": "cpor_hypothesis_RegulatoryRegistration_cpor_regulatoryregistration",
+      "ReferencingEntityNavigationPropertyName": "cpor_RegulatoryRegistration",
+      "RelationshipBehavior": 1,
+      "IsDenormalizedLookup": null,
+      "DenormalizedAttributeName": null,
+      "IsCustomizable": {
+        "Value": true,
+        "CanBeChanged": true,
+        "ManagedPropertyLogicalName": "iscustomizable"
+      },
+      "AssociatedMenuConfiguration": {
+        "Behavior": "UseCollectionName",
+        "Group": "Details",
+        "Order": 10000,
+        "IsCustomizable": true,
+        "Icon": null,
+        "ViewId": "00000000-0000-0000-0000-000000000000",
+        "AvailableOffline": true,
+        "MenuId": null,
+        "QueryApi": null,
+        "Label": {
+          "LocalizedLabels": [],
+          "UserLocalizedLabel": null
+        }
+      },
+      "CascadeConfiguration": {
+        "Assign": "NoCascade",
+        "Delete": "RemoveLink",
+        "Archive": "RemoveLink",
+        "Merge": "NoCascade",
+        "Reparent": "NoCascade",
+        "Share": "NoCascade",
+        "Unshare": "NoCascade",
+        "RollupView": "NoCascade"
+      },
+      "RelationshipAttributes": []
     }
   ]
 }

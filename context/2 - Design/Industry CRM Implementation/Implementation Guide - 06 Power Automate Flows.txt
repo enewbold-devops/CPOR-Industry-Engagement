@@ -1,7 +1,7 @@
 ================================================================================
 CPOR DURABLE — INDUSTRY CRM IMPLEMENTATION
 Implementation Guide 06: Power Automate Flows
-Date: 2026-06-15
+Date: 2026-06-19 (updated — schema-aligned)
 ================================================================================
 
 PURPOSE
@@ -104,8 +104,13 @@ Action: List rows (Dataverse connector)
   Filter rows:  cpor_registrationstatus eq 154080000 and cpor_lastverifieddate lt
                 @{addDays(utcNow(), -180)}
   Select columns: cpor_regulatoryregistrationid,cpor_name,cpor_lastverifieddate,
-                  cpor_riskrating,_cpor_industrycodeid_value,
-                  _cpor_territoryid_value,cpor_compliancedeadline
+                  cpor_riskrating,_cpor_industrycode_value,
+                  _cpor_territory_value,cpor_compliancedeadline
+
+SCHEMA NOTE: The FK lookup columns on cpor_RegulatoryRegistration use short
+  names (no "id" suffix). Use _cpor_industrycode_value and
+  _cpor_territory_value — NOT _cpor_industrycodeid_value or
+  _cpor_territoryid_value.
   Order by:     cpor_lastverifieddate asc
   Row count:    100
 
@@ -273,7 +278,7 @@ To test immediately: select Test > Manually trigger from the flow designer.
 VERIFICATION
 --------------------------------------------------------------------------------
 1. Temporarily change a test registration's cpor_lastverifieddate to a date
-   181 days ago and set cpor_status = "Active".
+   181 days ago and set cpor_registrationstatus = Active (154080000).
 2. Run the flow manually (Test > Manually trigger).
 3. Confirm the flow completes successfully (green checkmarks on all steps).
 4. Confirm the notification is received at the target (email or Teams channel).
@@ -322,6 +327,16 @@ Action: Condition
 
 True Branch: proceed with lookup.
 False Branch: Terminate (Succeeded). No sync needed.
+
+SCHEMA NOTE (Flows 2 and 3): The Industry Code FK field name on the Lead and
+  Account entities is defined by GII Guide 05 (FK Extensions) and has NOT been
+  confirmed against the deployed Lead/Account schema. Before building Flows 2
+  and 3, verify the actual deployed field name on those tables:
+    GET /EntityDefinitions(LogicalName='lead')/Attributes
+        ?$filter=startswith(LogicalName,'cpor')&$select=LogicalName,DisplayName
+  If the field is NOT named cpor_industrycodeid, update all references in
+  Flows 2 and 3 — trigger conditions, Select columns, Update row actions,
+  and @odata.bind expressions — to match the deployed name.
 
 NOTE ON CONDITION 2 RATIONALE: If cpor_industrycodeid is already set,
 do not overwrite it. An analyst may have deliberately set a specific catalog
@@ -557,8 +572,17 @@ RATIONALE:
   TM identity without requiring any additional custom fields.
 
 PREREQUISITE:
-  cpor_approvedby (Lookup → systemuser) and cpor_approvaldate (Date Only)
-  must be deployed on cpor_RegulatoryRegistration (see GII Guide 04 Part B).
+  SCHEMA STATUS (as of 2026-06-19) — verify before building this flow:
+  - cpor_verifiedby (Lookup → systemuser) IS deployed. This is the field
+    used for Approved By in this flow (deployed as cpor_verifiedby, Display
+    Name: "Verified By").
+  - cpor_approvaldate (Date Only) is NOT YET deployed. Create this column
+    on cpor_RegulatoryRegistration in the CPOR solution before implementing
+    Steps 6a and 6b. Schema name: cpor_ApprovalDate, Display Name:
+    "Approval Date".
+  - cpor_regulatorynotes (TextArea) IS deployed. This is the field used
+    for analyst/TM notes throughout this flow (deployed as
+    cpor_regulatorynotes, Display Name: "Regulatory Notes").
   territory.managerid must be populated for all territories with registered
   regulations. Verify: GET /territories?$filter=managerid ne null&$count=true
   BPF "CPOR — Registration Qualification" must be deployed and active.
@@ -586,8 +610,12 @@ STEP 2 (True branch): Get the registration's territory and its manager
 --------------------------------------------------------------------------------
 Action: Get a row by ID (Dataverse connector)
   Table Name:  territories
-  Row ID:      @{triggerOutputs()?['body/_cpor_territoryid_value']}
+  Row ID:      @{triggerOutputs()?['body/_cpor_territory_value']}
   Select columns: territoryid,name,_managerid_value
+
+SCHEMA NOTE: The Territory FK on cpor_RegulatoryRegistration is deployed as
+  cpor_territory (not cpor_territoryid). The OData expanded value attribute
+  is therefore _cpor_territory_value.
 
 Store result as varTerritory.
 
@@ -603,7 +631,7 @@ False Branch:
     Table Name:  cpor_regulatoryregistrations
     Row ID:      @{triggerOutputs()?['body/cpor_regulatoryregistrationid']}
     cpor_registrationstatus: 154080002   (revert to Pending)
-    cpor_analystnotes: concat(triggerOutputs()?['body/cpor_analystnotes'],
+    cpor_regulatorynotes: concat(triggerOutputs()?['body/cpor_regulatorynotes'],
       ' [Flow 4 ', utcNow(), '] No Territory Manager assigned to territory ',
       outputs('Get_Territory')?['body/name'],
       ' — approval routing failed. Assign a manager and re-submit.')
@@ -675,8 +703,13 @@ True branch (Approved):
     cpor_registrationstatus:   154080000   (Active)
     cpor_approvaldate:         @{utcNow('yyyy-MM-dd')}
     cpor_lastverifieddate:     @{utcNow('yyyy-MM-dd')}
-    cpor_approvedby@odata.bind: /systemusers(@{outputs('Get_TerritoryManager')
+    cpor_verifiedby@odata.bind: /systemusers(@{outputs('Get_TerritoryManager')
                                   ?['body/systemuserid']})
+
+  SCHEMA NOTE: cpor_verifiedby is the deployed field for Territory Manager
+    approval sign-off (Display Name: "Verified By"). cpor_approvaldate must
+    be created before this step — see Flow 4 PREREQUISITE at the start of
+    this section.
 
   Action: Perform a bound action (Dataverse connector) — advance BPF to Stage 5
     Table Name:   cpor_regulatoryregistrations
@@ -702,8 +735,8 @@ False branch (Rejected):
     Table Name:  cpor_regulatoryregistrations
     Row ID:      @{triggerOutputs()?['body/cpor_regulatoryregistrationid']}
     cpor_registrationstatus: 154080002   (Pending)
-    cpor_analystnotes: concat(
-      coalesce(triggerOutputs()?['body/cpor_analystnotes'], ''),
+    cpor_regulatorynotes: concat(
+      coalesce(triggerOutputs()?['body/cpor_regulatorynotes'], ''),
       ' [TM Rejection ', utcNow('yyyy-MM-dd'), ' by ',
       outputs('Get_TerritoryManager')?['body/fullname'], '] ',
       outputs('Start_and_wait_for_an_approval')?['body/responses'][0]['comments'])
@@ -748,12 +781,12 @@ VERIFICATION
 6. Refresh the registration record.
 7. Confirm:
    - cpor_registrationstatus = Active (154080000)
-   - cpor_approvedby = Territory Manager user
+   - cpor_verifiedby = Territory Manager user
    - cpor_approvaldate = today
    - cpor_lastverifieddate = today
    - BPF is at Stage 5 (Activated)
 8. Repeat test with Reject. Confirm:
    - cpor_registrationstatus = Pending (154080002)
-   - cpor_analystnotes contains the TM rejection comment
+   - cpor_regulatorynotes contains the TM rejection comment
    - BPF is at Stage 3 (Legislation Verification)
    - Global Industry Team receives rejection notification email.

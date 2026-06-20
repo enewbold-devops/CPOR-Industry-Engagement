@@ -1,7 +1,7 @@
 ================================================================================
 CPOR DURABLE — INDUSTRY CRM IMPLEMENTATION
 Implementation Guide 07: Business Process Flow — Registration Qualification
-Date: 2026-06-18
+Date: 2026-06-19 (updated — schema-aligned)
 ================================================================================
 
 PURPOSE
@@ -22,10 +22,16 @@ PREREQUISITE
 ------------
   GII Guides 00-07 and CRM Guides 00-06 fully deployed.
   cpor_registrationstatus optionset (Guide 01 Optionset 8) deployed.
-  cpor_approvedby, cpor_approvaldate, cpor_analystnotes fields deployed
-    (GII Guide 04 Part B).
-  territory.managerid populated for all territories that have registered
-    regulations. BPF Stage 4 routing will fail otherwise.
+  SCHEMA STATUS for approval/notes fields (as of 2026-06-19):
+    - cpor_verifiedby (Lookup → systemuser) IS deployed. Used as the
+      "Approved By" step in Stage 4 (deployed as cpor_verifiedby,
+      Display Name: "Verified By").
+    - cpor_approvaldate (Date Only) is NOT YET deployed. Must be created
+      in the CPOR solution before creating Stage 4 and Stage 5 steps.
+      Schema name: cpor_ApprovalDate, Display Name: "Approval Date".
+    - cpor_regulatorynotes (TextArea) IS deployed as the notes/caveats
+      field (deployed as cpor_regulatorynotes, Display Name:
+      "Regulatory Notes"). Used as the analyst notes step in Stage 4.
   Flow 4 (CRM Guide 06) deployed and Active before enabling this BPF.
 
 ENTITY PREREQUISITE
@@ -115,12 +121,21 @@ in the catalog. Also surfaces related entity context so the analyst can
 verify consistency with the crosswalk before advancing.
 
 STEP FIELDS (Business Required — required to advance):
-  Step 1:  cpor_industrycodeid    (Industry Code — Lookup to cpor_IndustryCode)
-  Step 2:  cpor_territoryid       (Territory — Lookup to territory)
-  Step 3:  cpor_compliancedomainid (Compliance Domain — Lookup to cpor_ComplianceDomain)
+  Step 1:  cpor_industrycode    (Industry Code — Lookup to cpor_IndustryCode)
+  Step 2:  cpor_territory       (Territory — Lookup to territory)
+  Step 3:  cpor_compliancedomain (Compliance Domain — Lookup to cpor_ComplianceDomain)
 
 OPTIONAL STEP:
-  Step 4:  cpor_regulatorysourceid (Regulatory Source — optional Lookup)
+  Step 4:  cpor_regulatorysource (Regulatory Source — optional Lookup)
+
+SCHEMA NOTE: The deployed FK lookup column names on cpor_RegulatoryRegistration
+  use short names without an "id" suffix. The fields are cpor_industrycode,
+  cpor_territory, cpor_compliancedomain, and cpor_regulatorysource. In the
+  BPF designer, select each step field from the column picker — look for
+  the Display Names: Industry Code, Territory, Compliance Domain, Regulatory
+  Source. The OData expanded value attributes are _cpor_industrycode_value,
+  _cpor_territory_value, _cpor_compliancedomain_value, and
+  _cpor_regulatorysource_value respectively.
 
 RELATED ENTITY CONTEXT — embedded sub-grids / quick views in Stage 2 panel:
   The BPF stage panel supports embedding quick view forms and sub-grids.
@@ -128,25 +143,25 @@ RELATED ENTITY CONTEXT — embedded sub-grids / quick views in Stage 2 panel:
   (not the BPF designer itself — add to the Main form's Section 1 as
   collapsible context panels):
 
-  a) Industry Domain Map context (under cpor_industrycodeid):
+  a) Industry Domain Map context (under cpor_industrycode):
      Sub-grid: cpor_IndustryDomainMap
-     Filter:   _cpor_industrycodeid_value eq {cpor_industrycodeid value}
+     Filter:   _cpor_industrycode_value eq {cpor_industrycode value}
      Columns:  cpor_ComplianceDomain.cpor_name, cpor_implementationpriority
      Purpose:  Shows which compliance domains are mapped to this industry code
-               so the analyst can confirm cpor_compliancedomainid aligns with
+               so the analyst can confirm cpor_compliancedomain aligns with
                the established crosswalk.
 
-  b) Territory Source Map context (under cpor_territoryid):
+  b) Territory Source Map context (under cpor_territory):
      Sub-grid: cpor_TerritorySourceMap
-     Filter:   _cpor_territoryid_value eq {cpor_territoryid value}
+     Filter:   _cpor_territory_value eq {cpor_territory value}
      Columns:  cpor_RegulatorySource.cpor_name, cpor_RegulatorySource.cpor_sourceurl
      Purpose:  Shows authoritative research sources for this territory so
                the analyst can verify the legislation URL before advancing.
 
   c) Existing Active registrations for same territory + domain:
      Sub-grid: cpor_RegulatoryRegistration (self-referencing view)
-     Filter:   _cpor_territoryid_value eq {cpor_territoryid value}
-               AND _cpor_compliancedomainid_value eq {cpor_compliancedomainid value}
+     Filter:   _cpor_territory_value eq {cpor_territory value}
+               AND _cpor_compliancedomain_value eq {cpor_compliancedomain value}
                AND cpor_registrationstatus eq 154080000
      Columns:  cpor_name, cpor_legislationname, cpor_riskrating
      Purpose:  Duplicate check — analyst can confirm this is not a duplicate
@@ -187,8 +202,12 @@ for Territory Manager sign-off.
 STEP FIELDS (Business Required — required to advance):
   Step 1:  cpor_legislationurl       (Legislation URL)
   Step 2:  cpor_riskrating           (Risk Rating)
-  Step 3:  cpor_mandatory            (Mandatory — Two Options)
+  Step 3:  cpor_ismandatory          (Mandatory — Two Options)
   Step 4:  cpor_lastverifieddate     (Last Verified Date — analyst stamps today)
+
+SCHEMA NOTE: The Mandatory field is deployed as cpor_ismandatory (not
+  cpor_mandatory). Select it from the step field picker by Display Name:
+  "Mandatory".
 
 OPTIONAL STEPS:
   Step 5:  cpor_applicabilityrule    (Applicability Rule)
@@ -196,7 +215,7 @@ OPTIONAL STEPS:
   Step 7:  cpor_compliancedeadline   (Compliance Deadline)
 
 QUICK VIEW — Regulatory Source (in Stage 3 panel context):
-  Quick View form for cpor_RegulatorySource linked via cpor_regulatorysourceid.
+  Quick View form for cpor_RegulatorySource linked via cpor_regulatorysource.
   Fields displayed: cpor_name, cpor_sourceurl, cpor_sourcetype, cpor_sourceregion.
   Purpose: Analyst confirms the source URL matches the legislation URL before
            marking cpor_lastverifieddate = today.
@@ -221,18 +240,26 @@ STAGE 4: Territory Approval
 
 STAGE NAME:   Territory Approval
 CATEGORY:     Approver (conceptual — no native BPF category for approval)
-OWNER:        Territory Manager (territory.managerid on cpor_territoryid)
+OWNER:        Territory Manager (territory.managerid on cpor_territory)
 
 PURPOSE: The Territory Manager for the registration's jurisdiction performs
 final sign-off. This is the quality gate that activates the record for
 pipeline grounding.
 
 STEP FIELDS (Business Required — required to advance):
-  Step 1:  cpor_approvedby     (Approved By — Lookup to systemuser)
+  Step 1:  cpor_verifiedby     (Verified By — Lookup to systemuser)
   Step 2:  cpor_approvaldate   (Approval Date)
 
+SCHEMA NOTE: The Approved By field is deployed as cpor_verifiedby (not
+  cpor_approvedby). Its Display Name is "Verified By". cpor_approvaldate
+  must be created in the CPOR solution before building this stage — see
+  the PREREQUISITE section at the top of this guide.
+
 OPTIONAL STEP:
-  Step 3:  cpor_analystnotes   (Analyst Notes — TM can add jurisdiction caveats)
+  Step 3:  cpor_regulatorynotes   (Regulatory Notes — TM can add jurisdiction caveats)
+
+SCHEMA NOTE: The analyst/TM notes field is deployed as cpor_regulatorynotes
+  (not cpor_analystnotes). Its Display Name is "Regulatory Notes".
 
 ENTRY ACTION — how Stage 4 entry triggers Flow 4:
   When the analyst advances the BPF to Stage 4 (clicks the Stage 4 header
@@ -257,10 +284,10 @@ ENTRY ACTION — how Stage 4 entry triggers Flow 4:
 PORTAL STEPS FOR STAGE 4:
   Add + New stage after Stage 3. Name it "Territory Approval".
   Add step fields as listed. Mark Steps 1-2 as Required.
-  (Step 3 cpor_analystnotes is optional / informational.)
+  (Step 3 cpor_regulatorynotes is optional / informational.)
   Consider adding a Stage 4 description visible to the TM:
     "Confirm the legislation is current and applicable to this territory.
-     Set Approved By to yourself and enter today's date to complete approval."
+     Set Verified By to yourself and enter today's date to complete approval."
 
 
 ================================================================================
@@ -277,7 +304,7 @@ qualification process and are Active in the pipeline.
 STEP FIELDS: None required.
   Display-only confirmation fields (add as read-only data steps):
   Step 1:  cpor_registrationstatus   (shows Active — 154080000)
-  Step 2:  cpor_approvedby           (shows approving TM)
+  Step 2:  cpor_verifiedby           (shows approving TM)
   Step 3:  cpor_approvaldate         (shows approval date)
 
 PORTAL STEPS FOR STAGE 5:
@@ -394,19 +421,19 @@ VERIFICATION
 
 4. STAGE 2 → 3 — Fill all required taxonomy fields. Advance to Stage 3.
 
-5. STAGE 3 → 4 — Fill cpor_legislationurl, cpor_riskrating, cpor_mandatory,
+5. STAGE 3 → 4 — Fill cpor_legislationurl, cpor_riskrating, cpor_ismandatory,
    cpor_lastverifieddate = today. Advance. Set cpor_registrationstatus =
    Pending TM Review. Confirm Flow 4 triggers (TM receives approval email).
 
 6. FLOW 4 APPROVAL — TM approves. Confirm:
    - cpor_registrationstatus = Active
-   - cpor_approvedby = TM
+   - cpor_verifiedby = TM
    - cpor_approvaldate = today
    - BPF shows Stage 5 (Activated)
 
 7. FLOW 4 REJECTION — Repeat test, TM rejects with a comment. Confirm:
    - cpor_registrationstatus = Pending
-   - cpor_analystnotes contains rejection comment
+   - cpor_regulatorynotes contains rejection comment
    - BPF returns to Stage 3
 
 8. RE-VERIFICATION — Set a test Active record's cpor_lastverifieddate to

@@ -1,7 +1,7 @@
 ================================================================================
 CPOR DURABLE — INDUSTRY CRM IMPLEMENTATION
 Implementation Guide 04: Catalog Health Dashboard
-Date: 2026-06-15
+Date: 2026-06-19 (updated — schema-aligned)
 ================================================================================
 
 PURPOSE
@@ -89,14 +89,18 @@ cpor_RegulatoryRegistration table:
     Aggregate: Count
 
   Category (X Axis — Group By):
-    Field:     cpor_industrycodeid → cpor_industrycloudvertical
+    Field:     cpor_industrycode → cpor_industrycloudvertical
                (related column from Industry Code's Industry Cloud Vertical)
 
   NOTE ON RELATED COLUMN: To group by a field on a related entity, in the
   chart designer select the related column by navigating the field picker:
-  cpor_industrycodeid (Industry Code) > cpor_industrycloudvertical.
+  cpor_industrycode (Industry Code) > cpor_industrycloudvertical.
   The chart then groups registration count by the Industry Cloud Vertical
   of the linked Industry Code.
+
+  SCHEMA NOTE: The Industry Code FK on cpor_RegulatoryRegistration is
+  deployed as cpor_industrycode (not cpor_industrycodeid). Select it from
+  the chart designer field picker by its Display Name: "Industry Code".
 
   View filter applied: Active Registrations view (the chart automatically
   applies the default view's filter when the dashboard renders).
@@ -145,12 +149,16 @@ implementation for a true number tile. A Power BI dataset query would be:
     SUMMARIZE(
       FILTER(
         cpor_regulatoryregistrations,
-        cpor_regulatoryregistrations[cpor_status] = "Active"
+        cpor_regulatoryregistrations[cpor_registrationstatus] = 154080000
         && cpor_regulatoryregistrations[cpor_lastverifieddate]
            < TODAY() - 180
       ),
       "Stale Count", COUNTROWS(cpor_regulatoryregistrations)
     )
+
+  SCHEMA NOTE: cpor_registrationstatus is the deployed optionset (integer).
+  Active = 154080000. The deprecated cpor_status text field is not in the
+  deployed schema and must not be used.
 Defer this to a future release if Power BI is not yet integrated.
 
 
@@ -267,8 +275,9 @@ VERIFICATION
 
 3. Slot 1 (bar chart): Confirm the chart renders without error.
    If no Active registrations exist, the chart area shows empty state.
-   Import at least one cpor_RegulatoryRegistration record with cpor_status
-   = "Active" and verify the chart renders a bar for the related vertical.
+   Import at least one cpor_RegulatoryRegistration record with
+   cpor_registrationstatus = Active (154080000) and verify the chart
+   renders a bar for the related Industry Cloud Vertical.
 
 4. Slot 3 (Approaching Deadlines list): Confirm the list shows records
    with cpor_compliancedeadline within the next 90 days.

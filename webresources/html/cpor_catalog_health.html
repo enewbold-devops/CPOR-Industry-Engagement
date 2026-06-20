@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>CPOR Catalog Health</title>
+  <link rel="stylesheet"
+    href="https://static2.sharepointonline.com/files/fabric/office-ui-fabric-core/11.0.0/css/fabric.min.css">
+  <link rel="stylesheet" href="../css/cpor_styles.css">
+  <style>
+    /* ── Splash ──────────────────────────────────────────────── */
+    #ch-splash {
+      position: fixed;
+      inset: 0;
+      background: #ffffff;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.5s ease;
+    }
+    #ch-logo {
+      width: 240px;
+      max-width: 60vw;
+      opacity: 0;
+      transition: opacity 0.65s ease;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #cpor-app { opacity: 0; transition: opacity 0.5s ease; }
+
+    /* ── Layout ──────────────────────────────────────────────── */
+    #cpor-main {
+      padding: 0;
+      height: calc(100vh - 48px);
+      overflow-y: auto;
+      background: var(--clr-bg-3);
+    }
+
+    /* ── KPI row ─────────────────────────────────────────────── */
+    .ch-kpi-row {
+      display: flex;
+      gap: var(--sp-4);
+      padding: var(--sp-5) var(--sp-5) 0;
+    }
+    .ch-kpi-row .cpor-kpi-card { flex: 1; min-width: 0; cursor: pointer; }
+
+    /* ── Dashboard grid ──────────────────────────────────────── */
+    .ch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--sp-4);
+      padding: var(--sp-4) var(--sp-5) var(--sp-5);
+    }
+    @media (max-width: 880px) { .ch-grid { grid-template-columns: 1fr; } }
+
+    /* ── Panel ───────────────────────────────────────────────── */
+    .ch-panel {
+      background: var(--clr-bg-1);
+      border: 1px solid var(--clr-stroke-2);
+      border-radius: var(--r-xl);
+      box-shadow: var(--shadow-2);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .ch-panel__hdr {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-3);
+      padding: 10px var(--sp-5);
+      border-bottom: 1px solid var(--clr-stroke-2);
+      flex-shrink: 0;
+      background: var(--clr-bg-2);
+    }
+    .ch-panel__title {
+      flex: 1;
+      font-size: var(--fs-sm);
+      font-weight: var(--fw-semibold);
+      color: var(--clr-fg-1);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ch-panel__badge {
+      font-size: var(--fs-xs);
+      font-weight: var(--fw-semibold);
+      padding: 2px 9px;
+      border-radius: var(--r-max);
+      background: var(--clr-bg-4);
+      color: var(--clr-fg-2);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ch-panel__badge--warn    { background: var(--clr-warning-bg); color: var(--clr-warning-fg); }
+    .ch-panel__badge--caution { background: var(--clr-caution-bg); color: var(--clr-caution-fg); }
+    .ch-panel__badge--error   { background: var(--clr-error-bg);   color: var(--clr-error-fg);   }
+    .ch-panel__badge--success { background: var(--clr-success-bg); color: var(--clr-success-fg); }
+
+    .ch-panel__body { flex: 1; overflow-y: auto; max-height: 320px; }
+    .ch-chart-body  { padding: var(--sp-5) var(--sp-5) var(--sp-3); }
+    .ch-chart-note  { text-align: center; font-size: var(--fs-xs); color: var(--clr-fg-3); margin: 6px 0 0; }
+
+    /* ── List table ──────────────────────────────────────────── */
+    .ch-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .ch-table th {
+      position: sticky; top: 0;
+      background: var(--clr-bg-2);
+      text-align: left;
+      font-weight: var(--fw-semibold);
+      font-size: var(--fs-xs);
+      color: var(--clr-fg-2);
+      padding: 6px var(--sp-4);
+      border-bottom: 1px solid var(--clr-stroke-2);
+      white-space: nowrap;
+      z-index: 1;
+    }
+    .ch-row {
+      border-bottom: 1px solid var(--clr-stroke-2);
+      cursor: pointer;
+      transition: background var(--t-fast);
+    }
+    .ch-row:last-child { border-bottom: none; }
+    .ch-row:hover { background: var(--clr-bg-3); }
+    .ch-row td { padding: 7px var(--sp-4); vertical-align: middle; }
+    .ch-row__name {
+      font-weight: var(--fw-medium);
+      color: var(--clr-brand);
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ch-row__meta { color: var(--clr-fg-2); white-space: nowrap; }
+    .ch-row--stale .ch-row__name { color: var(--clr-error-fg); }
+
+    /* ── Vertical dot ────────────────────────────────────────── */
+    .ch-vert-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    /* ── State classes ───────────────────────────────────────── */
+    .ch-loading { padding: 28px var(--sp-5); text-align: center; font-size: var(--fs-sm); color: var(--clr-fg-3); }
+    .ch-error   { padding: 20px var(--sp-5); text-align: center; font-size: var(--fs-sm); color: var(--clr-error-fg); }
+    .ch-empty   { padding: 28px var(--sp-5); text-align: center; font-size: var(--fs-sm); color: var(--clr-fg-3); }
+  </style>
+</head>
+<body>
+
+  <!-- ── Splash ──────────────────────────────────────────────── -->
+  <div id="ch-splash">
+    <img id="ch-logo"
+         src="../media/Microsoft-Logo.png"
+         onerror="this.src='../media/microsoft_logo.svg'"
+         alt="Microsoft">
+  </div>
+
+  <!-- ── App ─────────────────────────────────────────────────── -->
+  <div id="cpor-app">
+
+    <header id="cpor-header" class="cpor-header"></header>
+
+    <main id="cpor-main">
+
+      <!-- KPI summary row -->
+      <div class="ch-kpi-row" id="ch-kpi-row"></div>
+
+      <!-- Dashboard grid -->
+      <div class="ch-grid" id="ch-grid">
+
+        <!-- Panel 1 — Active by Vertical (bar chart) -->
+        <section class="ch-panel" id="ch-chart-panel">
+          <div class="ch-panel__hdr">
+            <span class="ch-panel__title">Active Registrations by Industry Cloud Vertical</span>
+            <span class="ch-panel__badge ch-panel__badge--success" id="ch-active-total">&hellip;</span>
+          </div>
+          <div class="ch-panel__body ch-chart-body" id="ch-chart-body">
+            <div class="ch-loading">Loading chart&hellip;</div>
+          </div>
+        </section>
+
+        <!-- Panel 2 — Stale records -->
+        <section class="ch-panel" id="ch-stale-panel">
+          <div class="ch-panel__hdr">
+            <span class="ch-panel__title">Stale &mdash; Needs Reverification (&gt;180 days)</span>
+            <span class="ch-panel__badge ch-panel__badge--warn" id="ch-stale-count">&hellip;</span>
+          </div>
+          <div class="ch-panel__body" id="ch-stale-body">
+            <div class="ch-loading">Loading&hellip;</div>
+          </div>
+        </section>
+
+        <!-- Panel 3 — Approaching deadlines -->
+        <section class="ch-panel" id="ch-deadline-panel">
+          <div class="ch-panel__hdr">
+            <span class="ch-panel__title">Approaching Compliance Deadlines (next 90 days)</span>
+            <span class="ch-panel__badge ch-panel__badge--caution" id="ch-deadline-count">&hellip;</span>
+          </div>
+          <div class="ch-panel__body" id="ch-deadline-body">
+            <div class="ch-loading">Loading&hellip;</div>
+          </div>
+        </section>
+
+        <!-- Panel 4 — High Risk active -->
+        <section class="ch-panel" id="ch-highrisk-panel">
+          <div class="ch-panel__hdr">
+            <span class="ch-panel__title">High Risk &mdash; Active Registrations</span>
+            <span class="ch-panel__badge ch-panel__badge--error" id="ch-highrisk-count">&hellip;</span>
+          </div>
+          <div class="ch-panel__body" id="ch-highrisk-body">
+            <div class="ch-loading">Loading&hellip;</div>
+          </div>
+        </section>
+
+      </div><!-- /.ch-grid -->
+    </main>
+  </div><!-- /#cpor-app -->
+
+  <script src="../js/cpor_xrm_client.js"></script>
+  <script src="../js/cpor_components.js"></script>
+  <script src="../js/cpor_catalog_health.js"></script>
+</body>
+</html>

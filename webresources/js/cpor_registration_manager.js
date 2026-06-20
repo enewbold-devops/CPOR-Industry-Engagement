@@ -119,7 +119,7 @@ var CporRegistrationManager = (function () {
         // URL pre-applied filter takes precedence for status/special filters
         if (state.urlFilter === 'stale') {
             parts.push("cpor_registrationstatus eq 154080000");
-            parts.push("cpor_lastverifieddate lt " + CporXrm.todayMinusDays(180));
+            parts.push("cpor_lastverifieddate lt " + CporXrm.todayMinusDaysDate(180));
         } else if (state.urlFilter === 'deadline') {
             parts.push("cpor_registrationstatus eq 154080000");
             parts.push("cpor_compliancedeadline le " + CporXrm.todayPlusDays(90));
@@ -441,7 +441,8 @@ var CporRegistrationManager = (function () {
                     { value: '', label: 'All Statuses' },
                     { value: '154080000', label: 'Active' },
                     { value: '154080001', label: 'Superseded' },
-                    { value: '154080002', label: 'Pending' }
+                    { value: '154080002', label: 'Pending' },
+                    { value: '154080003', label: 'Pending TM Review' }
                 ]
             },
             {

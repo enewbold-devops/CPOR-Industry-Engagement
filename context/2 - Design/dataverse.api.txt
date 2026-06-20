@@ -21,4 +21,4 @@ Territory (CPOR-extended)
 
 # All relationships for a table
 GET https://enewbold-sandbox.crm.dynamics.com/api/data/v9.2/api/data/v9.2/EntityDefinitions(LogicalName='cpor_regulatoryregistration')
-    ?$expand=ManyToOneRelationships,OneToManyRelationships
+?$expand=ManyToOneRelationships,OneToManyRelationships
