@@ -202,11 +202,50 @@ NOTE: The deprecated cpor_status text field (Active/Superseded/Pending string va
   bulk update in the POST-DEPLOYMENT STEPS below before removing it.
 
 ================================================================================
+OPTIONSET 9 \u2014 cpor_intakesource
+================================================================================
+
+PURPOSE
+-------
+  Captures how the need for a new regulatory registration was identified.
+  Used on cpor_RegulatoryRegistration to support research prioritisation,
+  audit tracing, and seller-demand analytics.
+
+Schema Name:  cpor_intakesource
+Display Name: Intake Source
+Used on:      cpor_RegulatoryRegistration.cpor_intakesource
+
+VALUES
+------
+  Display Name          Integer     Notes
+  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  Regulatory Alert      154080000   Proactive regulatory monitoring by analyst
+  Seller Request        154080001   Request originated from a seller in the field
+  Annual Review         154080002   Scheduled annual catalog refresh cycle
+  Partner Signal        154080003   Partner ecosystem raised the requirement
+  Internal Analysis     154080004   Derived from AI pipeline gap analysis
+  Other                 154080005   Source does not fit the above categories
+
+PORTAL STEPS (make.powerapps.com)
+----------------------------------
+  1.  CPOR solution > Objects > Choices > + New choice.
+  2.  Display name: Intake Source
+  3.  Name (schema): cpor_intakesource
+  4.  Add each value above with the integer shown (prefix 154080).
+  5.  Save.
+  6.  On cpor_RegulatoryRegistration, add a new Choice column:
+        Column name: Intake Source
+        Schema name: cpor_intakesource
+        Choice:      cpor_intakesource (the one just created)
+        Required:    No
+      Save the column.
+
+================================================================================
 POST-DEPLOYMENT STEPS
 ================================================================================
 
 1.  In make.powerapps.com, open the CPOR solution and navigate to
-    Objects > Choices. Confirm all 8 new Choices appear with the correct
+    Objects > Choices. Confirm all 9 new Choices appear with the correct
     display names and options.
 
 2.  IMPORTANT: Verify the integer values that were actually deployed by

@@ -41,8 +41,8 @@ FORM 1: cpor_RegulatoryRegistration — Main Form
 
 FORM NAME: Information (existing default — edit in place)
 HEADER FIELDS (always visible, top of form):
-  cpor_name          (primary field — legislation short name)
-  cpor_status        (Active / Superseded / Pending — quick-scan field)
+  cpor_name                  (primary field — legislation short name)
+  cpor_registrationstatus    (Registration Status choice field — quick-scan pipeline eligibility)
 
 TAB STRUCTURE: Single tab (no tab bar needed — all sections in one scroll)
 
@@ -57,9 +57,11 @@ Layout: 2-column
   Left column                       Right column
   --------------------------------  --------------------------------
   Industry Code *                   Territory *
-  (cpor_industrycodeid)             (cpor_territoryid)
+  (cpor_industrycode)               (cpor_territory)
   Compliance Domain *               Regulatory Source
-  (cpor_compliancedomainid)         (cpor_regulatorysourceid)
+  (cpor_compliancedomain)           (cpor_regulatorysource)
+  Requested By
+  (cpor_requestedby)
 
 Field labels use the display names from GII Guide 04.
 Fields marked * are required (RequiredLevel = Required per GII Guide 04).
@@ -81,8 +83,11 @@ Layout: 2-column
   --------------------------------  --------------------------------
   Regulator / Body Name             Regulator Type
   (cpor_regulatorbodyname)          (cpor_regulatortype)
-  Regulator Website URL
-  (cpor_regulatorwebsiteurl)
+  Regulator Website URL             Intake Source
+  (cpor_regulatorwebsiteurl)        (cpor_intakesource)
+
+Layout: 1-column (below the 2-column rows)
+  Market Context (cpor_marketcontext)    [full width, single-line text]
 
 
 SECTION 3: Legislation Details
@@ -98,6 +103,7 @@ Layout: 2-column header + full-width fields below
   Row 2 (full-width, 1-column):
   Legislation Name (cpor_legislationname)       [full width]
   Legislation URL (cpor_legislationurl)         [full width]
+  Additional Sources (cpor_additionalsourceurls) [full width, multiline, 3 rows]
   Applicability Rule (cpor_applicabilityrule)   [full width, multiline, 4 rows]
 
 SECTION NOTE: "Applicability Rule should be plain-language. Example: 'Applies
@@ -116,7 +122,7 @@ Layout: 2-column
   Left column                       Right column
   --------------------------------  --------------------------------
   Risk Rating                       Mandatory
-  (cpor_riskrating)                 (cpor_mandatory)
+  (cpor_riskrating)                 (cpor_ismandatory)
   Registration Status               (empty)
   (cpor_registrationstatus)
 
@@ -166,16 +172,32 @@ Purpose: Freeform scratchpad for analyst context, change history notes,
 
 Layout: 1-column, full width
 
-  Analyst Notes (cpor_analystnotes — add this field if not yet in GII)
+  Regulatory Notes (cpor_regulatorynotes)
 
-NOTE ON cpor_analystnotes: This field was not defined in GII Guide 04.
-Add it as a new Text Area (2000 chars) field to cpor_RegulatoryRegistration
-before configuring this form section:
-  Table: cpor_RegulatoryRegistration
-  Field Name: cpor_analystnotes
-  Display Name: Analyst Notes
-  Type: Text Area (2000)
-  Required: None
+NOTE: cpor_regulatorynotes is the deployed field for analyst/TM notes
+(Display Name: "Regulatory Notes", TextArea 4000 chars). This section
+remains editable when a record is Superseded (Business Rule 1 locks all
+other sections but leaves cpor_regulatorynotes editable).
+
+
+SECTION 7: Sales Alignment
+---------------------------
+Purpose: Seller-facing context fields that link the regulation to a Microsoft
+         sales motion. These fields are completed post-BPF by the analyst or
+         Territory Manager. Not required for pipeline grounding but visible
+         to sellers browsing the catalog.
+
+Layout: 2-column header + full-width below
+
+  Row 1 (2-column):
+  Left: Solution Area (cpor_solutionarea)   Right: Buyer Persona (cpor_buyerpersona)
+
+  Row 2 (full-width):
+  Sales Narrative (cpor_salesnarrative)   [full width, multiline, 3 rows]
+
+SECTION NOTE: "Sales Alignment fields are optional analyst annotations.
+  Sellers: Use Sales Narrative as a conversation starting point — verify
+  accuracy with your account team before using in customer-facing materials."
 
 FORM FOOTER
 -----------

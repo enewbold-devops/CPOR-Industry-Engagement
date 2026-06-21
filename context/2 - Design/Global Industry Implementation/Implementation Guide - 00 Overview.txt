@@ -53,7 +53,8 @@ LOCKED DESIGN DECISIONS
     Consistent with existing custom entities in the solution. Roles grant
     Global-level access to the catalog entities for appropriate principals.
 
-7.  Freshness gate of 90 days (configurable).
+7.  Freshness gate of 180 days (configurable via CATALOG_FRESHNESS_DAYS env var,
+    default 180 if not set).
     cpor_RegulatoryRegistration rows older than CATALOG_FRESHNESS_DAYS env var
     are excluded from Stage 0 supply. Stale rows fall back to
     cpor_TerritorySourceMap research source URLs. Stage 4 falls back to model
@@ -96,14 +97,18 @@ FK additions to existing entities
   Account                     + cpor_IndustryCode (lookup)
 
 
-NEW OPTIONSETS (6)
+NEW OPTIONSETS (9)
 ------------------
   cpor_industrycloudvertical      6 values
   cpor_territorytype              5 values
   cpor_jurisdictionlevel          5 values
   cpor_implementationpriority     3 values
-  cpor_riskrating                 3 values
+  cpor_riskrating                 4 values   (High / Medium / Low / Informational)
   cpor_legaltype                  6 values
+  cpor_regulatortype              7 values   (Federal / State-Provincial / Supranational /
+                                              Municipal / Industry / Self-Regulatory /
+                                              International)
+  cpor_registrationstatus         4 values   (Active / Superseded / Pending / Pending TM Review)
 
 
 NEW SECURITY ROLE

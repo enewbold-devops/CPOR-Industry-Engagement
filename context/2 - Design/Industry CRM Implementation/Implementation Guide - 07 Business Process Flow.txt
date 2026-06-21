@@ -34,6 +34,24 @@ PREREQUISITE
       "Regulatory Notes"). Used as the analyst notes step in Stage 4.
   Flow 4 (CRM Guide 06) deployed and Active before enabling this BPF.
 
+FIELD NAME REFERENCE TABLE
+---------------------------
+  Earlier guides / common mistakes vs. deployed schema names:
+
+  DEPLOYED NAME           DISPLAY NAME         EARLIER INCORRECT NAMES
+  ─────────────────────── ──────────────────── ──────────────────────────
+  cpor_regulatorynotes    Regulatory Notes     cpor_analystnotes, cpor_notes
+  cpor_verifiedby         Verified By          cpor_approvedby
+  cpor_ismandatory        Mandatory            cpor_mandatory
+  cpor_registrationstatus Registration Status  cpor_status
+  cpor_industrycode       Industry Code        cpor_industrycodeid
+  cpor_territory          Territory            cpor_territoryid
+  cpor_compliancedomain   Compliance Domain    cpor_compliancedomainid
+  cpor_regulatorysource   Regulatory Source    cpor_regulatorysourceid
+
+  When building BPF steps, Views, or Business Rules, always use the
+  DEPLOYED NAME column above.
+
 ENTITY PREREQUISITE
 -------------------
   cpor_RegulatoryRegistration currently has IsBusinessProcessEnabled = false.

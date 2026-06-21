@@ -606,6 +606,18 @@ True Branch: proceed with TM approval routing.
 False Branch: Terminate (Succeeded). Status changed to something else — no action.
 
 --------------------------------------------------------------------------------
+STEP 1b (True branch): Stamp Stage 4 submitted date for SLA tracking
+--------------------------------------------------------------------------------
+Action: Update a row (Dataverse connector)
+  Table Name:  cpor_regulatoryregistrations
+  Row ID:      @{triggerOutputs()?['body/cpor_regulatoryregistrationid']}
+  cpor_stage4submitteddate:  @{utcNow('yyyy-MM-dd')}
+
+NOTE: cpor_stage4submitteddate (Date Only field — see GII Guide 04) records
+  when the analyst submitted for TM review. Together with cpor_approvaldate
+  this enables SLA tracking (target: TM approval within 7 business days).
+
+--------------------------------------------------------------------------------
 STEP 2 (True branch): Get the registration's territory and its manager
 --------------------------------------------------------------------------------
 Action: Get a row by ID (Dataverse connector)
@@ -684,9 +696,30 @@ NOTE: The Approvals connector requires Power Automate Premium. The approval
   email is sent from Power Automate; the TM clicks Approve or Reject directly
   in the email or in the Power Automate mobile app.
 
-NOTE ON TIMEOUT: By default, Start and wait for an approval does not timeout.
-  For production, consider wrapping in a Parallel branch with a Delay of 7 days
-  and a reminder / escalation to the CPOR team if no response is received.
+7-DAY TIMEOUT AND ESCALATION
+  Wrap the "Start and wait for an approval" action in a Parallel branch:
+
+  Branch A: Start and wait for an approval (as specified above)
+
+  Branch B: Delay
+    Count: 7   Unit: Day
+    After the delay — Condition: Did branch A complete?
+    (Use the Control > Stop if not applicable, or use a flag variable
+    set to true at the start of Branch A's approval success/reject steps.)
+    If Branch A has NOT resolved:
+      Action: Send notification to CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET
+        Subject: CPOR TM Approval Overdue (7 days) —
+                 @{triggerOutputs()?['body/cpor_name']}
+        Body:    TM @{outputs('Get_TerritoryManager')?['body/fullname']}
+                 has not responded to the approval request for
+                 @{triggerOutputs()?['body/cpor_name']}.
+                 Submitted: @{triggerOutputs()?['body/cpor_stage4submitteddate']}
+                 Please escalate or re-assign the Territory Manager
+                 for territory @{outputs('Get_Territory')?['body/name']}.
+
+  NOTE: Power Automate Parallel branches with approval timeout are available
+  in Premium flows. Configure Branch B using the "Add a parallel branch"
+  option before the Start-and-wait action in the designer.
 
 --------------------------------------------------------------------------------
 STEP 6a (Approved branch): Activate the record
@@ -726,6 +759,18 @@ True branch (Approved):
              on @{utcNow('yyyy-MM-dd')}. Record is now Active and available
              for pipeline grounding.
 
+  Action: Send notification to the record owner (analyst)
+    Action: Get the record owner — Get a row by ID (Dataverse connector)
+      Table Name:  systemusers
+      Row ID:      @{triggerOutputs()?['body/_ownerid_value']}
+      Select columns: systemuserid,fullname,internalemailaddress
+    Action: Send an email (or Teams Adaptive Card)
+      To:      @{outputs('Get_RecordOwner')?['body/internalemailaddress']}
+      Subject: Your registration was approved: @{triggerOutputs()?['body/cpor_name']}
+      Body:    @{outputs('Get_TerritoryManager')?['body/fullname']} has approved
+               your registration for @{triggerOutputs()?['body/cpor_legislationname']}.
+               The record is now Active and available for pipeline grounding.
+
 --------------------------------------------------------------------------------
 STEP 6b (Rejected branch): Return to Pending at Stage 3
 --------------------------------------------------------------------------------
@@ -759,6 +804,20 @@ False branch (Rejected):
              The registration has been returned to Pending — Legislation
              Verification (Stage 3). Review the rejection comments and
              update the record before resubmitting for TM approval.
+
+  Action: Send notification to the record owner (analyst)
+    (Re-use the Get_RecordOwner action from Step 6a, or add a new Get row action)
+    Action: Send an email (or Teams Adaptive Card)
+      To:      @{outputs('Get_RecordOwner')?['body/internalemailaddress']}
+      Subject: Your registration was rejected: @{triggerOutputs()?['body/cpor_name']}
+      Body:    @{outputs('Get_TerritoryManager')?['body/fullname']} has rejected
+               your registration for @{triggerOutputs()?['body/cpor_legislationname']}.
+
+               TM Comments: @{outputs('Start_and_wait_for_an_approval')
+                              ?['body/responses'][0]['comments']}
+
+               The record has been returned to Stage 3 (Legislation Verification).
+               Review the TM comments, update the record, and resubmit when ready.
 
 --------------------------------------------------------------------------------
 FLOW ACTIVATION

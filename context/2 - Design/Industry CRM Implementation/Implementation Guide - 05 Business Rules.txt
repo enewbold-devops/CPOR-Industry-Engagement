@@ -35,7 +35,7 @@ This guide defines 2 Business Rules that ARE fully supported natively.
 
 PREREQUISITE: GII Guides 00-07 deployed. Guide 03 (Forms) complete —
 the Business Rules reference fields on the form defined in Guide 03,
-including the new cpor_analystnotes field.
+including the cpor_regulatorynotes field.
 
 
 ================================================================================
@@ -53,13 +53,13 @@ records while preserving the analyst's ability to add retirement context.
 CONDITION
 ---------
 IF:
-  cpor_status  Equals  Superseded
+  cpor_registrationstatus  Equals  Superseded (154080001)
 
 ACTION: Disable (lock) the following fields:
-  cpor_industrycodeid
-  cpor_territoryid
-  cpor_compliancedomainid
-  cpor_regulatorysourceid
+  cpor_industrycode
+  cpor_territory
+  cpor_compliancedomain
+  cpor_regulatorysource
   cpor_regulatorbodyname
   cpor_regulatortype
   cpor_regulatorwebsiteurl
@@ -68,14 +68,14 @@ ACTION: Disable (lock) the following fields:
   cpor_legislationurl
   cpor_applicabilityrule
   cpor_riskrating
-  cpor_mandatory
+  cpor_ismandatory
   cpor_effectivedate
   cpor_compliancedeadline
   cpor_lastverifieddate
   cpor_nextsignificantdate
 
 FIELD THAT REMAINS EDITABLE (NOT in the disable list):
-  cpor_analystnotes   ← analyst can still document why the record was superseded
+  cpor_regulatorynotes   ← analyst can still document why the record was superseded
   cpor_registrationstatus  ← must remain editable so analyst can reactivate if needed
 
 NOTE ON cpor_registrationstatus: Leaving cpor_registrationstatus editable for
@@ -136,7 +136,7 @@ VERIFICATION
 1. Open an Active cpor_RegulatoryRegistration record.
    Change cpor_registrationstatus to "Superseded".
    Confirm all fields in the disable list immediately become read-only.
-   Confirm cpor_analystnotes remains editable.
+   Confirm cpor_regulatorynotes remains editable.
    Confirm cpor_registrationstatus itself remains editable.
 
 2. Change cpor_registrationstatus back to "Active".
@@ -154,7 +154,7 @@ NAME:       CPOR — Require Compliance Deadline When Mandatory
 SCOPE:      All Forms
 TABLE:      cpor_RegulatoryRegistration
 
-PURPOSE: When an analyst marks a regulation as Mandatory (cpor_mandatory = Yes),
+PURPOSE: When an analyst marks a regulation as Mandatory (cpor_ismandatory = Yes),
 the Compliance Deadline field (cpor_compliancedeadline) becomes required.
 A mandatory regulation with no deadline is incomplete — it cannot feed the
 pipeline's urgency scoring correctly.
@@ -162,7 +162,7 @@ pipeline's urgency scoring correctly.
 CONDITION
 ---------
 IF:
-  cpor_mandatory  Equals  Yes (true — boolean Two Options field)
+  cpor_ismandatory  Equals  Yes (true — boolean Two Options field)
 
 ACTION: Set required level on cpor_compliancedeadline
   Field:           cpor_compliancedeadline (Compliance Deadline)
@@ -183,7 +183,7 @@ PORTAL STEPS
 
 2. In the Condition panel:
    Entity:    cpor_RegulatoryRegistration (current record)
-   Field:     cpor_mandatory (Mandatory)
+   Field:     cpor_ismandatory (Mandatory)
    Operator:  Equals
    Type:      Value
    Value:     Yes (select from the Two Options dropdown — shows as Yes/No)
@@ -225,10 +225,10 @@ The following Business Rule cannot be implemented with native MDA Business Rules
 due to the dynamic date comparison limitation.
 
 DESIRED BEHAVIOR (future):
-  When a record form is opened and cpor_status = "Active" and
-  cpor_lastverifieddate < today minus 90 days,
+  When a record form is opened and cpor_registrationstatus = "Active" and
+  cpor_lastverifieddate < today minus 180 days,
   show a yellow warning notification on the form:
-    "This record has not been verified in the last 90 days.
+    "This record has not been verified in the last 180 days.
      After reviewing, update the Last Verified Date."
 
 CURRENT MITIGATION:

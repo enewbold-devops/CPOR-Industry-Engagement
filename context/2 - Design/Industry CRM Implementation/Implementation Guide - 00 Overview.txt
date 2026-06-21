@@ -32,7 +32,8 @@ OUT OF SCOPE:
 Both the CRM layer and the AI pipeline layer read from the same Dataverse
 catalog. Changes made by the Industry Team in the CPOR Industry Catalog app
 are immediately available to the CPOR pipeline (subject to the 180-day
-freshness gate defined in GII Guide 00).
+freshness gate defined in GII Guide 00 Decision 7 — controlled by the
+CATALOG_FRESHNESS_DAYS environment variable, default 180 days).
 
 
 PREREQUISITE: GII GUIDES 00-07 FULLY DEPLOYED

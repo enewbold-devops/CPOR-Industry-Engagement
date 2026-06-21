@@ -111,9 +111,10 @@ FIELDS — RISK AND STATUS
 
 Field Name               Display Name          Type           Required  Notes
 -----------------------  --------------------  -------------  --------  ---------------------------
-cpor_mandatory           Mandatory             Two Options    None      Yes = legally mandatory;
+cpor_ismandatory         Mandatory             Two Options    None      Yes = legally mandatory;
                                                                          No = voluntary / best
-                                                                         practice
+                                                                         practice.
+                                                                         Deployed as cpor_ismandatory.
 cpor_riskrating          Risk Rating           Choice         None      Options: cpor_riskrating
                                                                          High/Medium/Low
                                                                          Feeds regulatoryExposure
@@ -154,6 +155,59 @@ cpor_nextsignificantdate Next Significant Date Date Only      None      Next exp
                                                                          enforcement change date.
 
 ================================================================================
+FIELDS — INTAKE AND SALES ALIGNMENT
+================================================================================
+
+These fields support research intake tracing, seller collaboration, and
+sales motion context. All are optional (Required: None).
+
+Field Name               Display Name          Type              Required  Notes
+-----------------------  --------------------  ----------------  --------  ---------------------------
+cpor_intakesource        Intake Source         Choice            None      How the research need was
+                                                                            identified. Uses optionset
+                                                                            cpor_intakesource (Guide 01,
+                                                                            Optionset 9). Values: Regulatory
+                                                                            Alert / Seller Request /
+                                                                            Annual Review / Partner Signal /
+                                                                            Internal Analysis / Other.
+cpor_marketcontext       Market Context        Text (300)        None      Short description of the market
+                                                                            context that prompted this
+                                                                            registration — e.g. "EU AI Act
+                                                                            wave affecting FinServ segment."
+cpor_requestedby         Requested By          Lookup            None      → systemuser. The analyst or
+                                                                            seller who submitted the intake
+                                                                            request. Cascade Delete:
+                                                                            RemoveLink.
+cpor_stage4submitteddate Stage 4 Submitted     Date Only         None      Date the analyst submitted the
+                                                                            record for TM approval (BPF
+                                                                            Stage 4). Stamped by Flow 4 on
+                                                                            submission. Enables SLA tracking.
+cpor_additionalsourceurls Additional Sources   Text Area (2000)  None      Newline-separated list of
+                                                                            supplementary reference URLs
+                                                                            beyond the primary
+                                                                            cpor_regulatorysource lookup.
+cpor_solutionarea        Solution Area         Text (100)        None      Microsoft solution area most
+                                                                            relevant to this regulation
+                                                                            (e.g. "Security", "Compliance",
+                                                                            "Modern Work"). Used for
+                                                                            sales motion alignment.
+cpor_buyerpersona        Buyer Persona         Text (100)        None      Primary buyer role affected by
+                                                                            this regulation (e.g. "CISO",
+                                                                            "DPO", "CFO"). Used for
+                                                                            targeted seller messaging.
+cpor_salesnarrative      Sales Narrative       Text Area (500)   None      Brief analyst-curated talking
+                                                                            point linking this regulation
+                                                                            to a Microsoft value proposition.
+                                                                            Used by sellers in conversations.
+
+PORTAL STEPS FOR EACH NEW FIELD
+---------------------------------
+  Table: cpor_RegulatoryRegistration
+  For each field, select + New column, enter the schema name and type above.
+  All fields: Required = None; Searchable = No (except cpor_solutionarea,
+  cpor_buyerpersona which may be set Searchable = Yes for global search).
+
+================================================================================
 FIELDS — GOVERNANCE
 ================================================================================
 
@@ -163,15 +217,14 @@ cpor_owner               Record Owner (Text)   Text (200)     None      Name of 
                                                                          for maintaining this record.
                                                                          Separate from Dataverse
                                                                          OwnerId system field.
-cpor_analystnotes        Analyst Notes         Text Area(2000) None     Free-form analyst notes,
+cpor_regulatorynotes     Regulatory Notes      Text Area(2000) None     Free-form analyst notes,
                                                                          exceptions, caveats, and
                                                                          re-verification context.
+                                                                         Display Name: "Regulatory Notes".
                                                                          Remains editable even when
                                                                          record is Superseded.
-                                                                         (Previously: cpor_notes —
-                                                                         renamed for clarity.)
 cpor_notes               Notes (DEPRECATED)    Text Area(2000) None     DEPRECATED. Use
-                                                                         cpor_analystnotes instead.
+                                                                         cpor_regulatorynotes instead.
                                                                          Retained for migration only.
 
 ================================================================================
@@ -180,9 +233,11 @@ FIELDS — TERRITORY MANAGER APPROVAL
 
 Field Name               Display Name          Type           Required  Notes
 -----------------------  --------------------  -------------  --------  ---------------------------
-cpor_approvedby          Approved By           Lookup         None      → systemuser (OOB)
+cpor_verifiedby          Verified By           Lookup         None      → systemuser (OOB)
                                                                          Territory Manager who
                                                                          completed BPF Stage 4.
+                                                                         Deployed as cpor_verifiedby,
+                                                                         Display Name: "Verified By".
                                                                          Cascade Delete: RemoveLink.
                                                                          Stamped by Flow 4 on
                                                                          TM approval.
@@ -199,7 +254,7 @@ cpor_approvaldate        Approval Date         Date Only      None      Date Sta
 DUPLICATE DETECTION RULE
 ================================================================================
 Rule Name: "Duplicate Regulatory Registration"
-Fields:    cpor_industrycodeid AND cpor_territoryid AND cpor_legislationname
+Fields:    cpor_industrycode AND cpor_territory AND cpor_legislationname
 Match:     Exact on all 3 fields (case-insensitive on cpor_legislationname)
 Action:    Warn on create and import
 
@@ -217,29 +272,29 @@ referenceResolver.js builds candidateRegulations[] using:
 
   // Build territory filter across the jurisdiction chain
   const territoryFilter = jurisdictionChain
-    .map(t => `_cpor_territoryid_value eq ${t.territoryid}`)
+    .map(t => `_cpor_territory_value eq ${t.territoryid}`)
     .join(' or ');
 
   GET /cpor_regulatoryregistrations
     ?$filter=
-      _cpor_industrycodeid_value eq '{industryCodeGuid}'
+      _cpor_industrycode_value eq '{industryCodeGuid}'
       and ({territoryFilter})
       and cpor_registrationstatus eq 154080000
       and cpor_lastverifieddate ge {freshnessCutoff}
     &$expand=
-      cpor_compliancedomainid($select=cpor_domaincode,cpor_name),
-      cpor_territoryid($select=cpor_territorycode,cpor_jurisdictionlevel)
+      cpor_ComplianceDomain($select=cpor_domaincode,cpor_name),
+      cpor_Territory($select=cpor_territorycode,cpor_jurisdictionlevel)
     &$select=
       cpor_regulatoryregistrationid,
       cpor_name,
       cpor_legislationname,
       cpor_applicabilityrule,
-      cpor_mandatory,
+      cpor_ismandatory,
       cpor_riskrating,
       cpor_legislationurl,
       cpor_effectivedate,
       cpor_compliancedeadline
-    &$orderby=cpor_territoryid/cpor_jurisdictionlevel desc
+    &$orderby=cpor_Territory/cpor_jurisdictionlevel desc
 
 Returns records sorted most-specific first (Country before Region before Global).
 LLM receives these as the `candidateRegulations` array in the grounding context.
@@ -290,7 +345,7 @@ Record 1:
   ComplianceDomain:     PRIV
   cpor_legaltype:       Directive (154080002)
   cpor_legislationname: General Data Protection Regulation
-  cpor_mandatory:       Yes
+  cpor_ismandatory:     Yes
   cpor_riskrating:      High (154080000)
   cpor_registrationstatus: Active (154080000)
   cpor_lastverifieddate: (today's date)
@@ -302,7 +357,7 @@ Record 2:
   ComplianceDomain:     CYBER
   cpor_legaltype:       Standard (154080003)
   cpor_legislationname: ISO/IEC 27001:2022 Information Security Management
-  cpor_mandatory:       No
+  cpor_ismandatory:     No
   cpor_riskrating:      Medium (154080001)
   cpor_registrationstatus: Active (154080000)
   cpor_lastverifieddate: (today's date)
@@ -314,7 +369,7 @@ Record 3:
   ComplianceDomain:     CYBER
   cpor_legaltype:       Regulation (154080001)
   cpor_legislationname: Digital Operational Resilience Act
-  cpor_mandatory:       Yes
+  cpor_ismandatory:     Yes
   cpor_riskrating:      High (154080000)
   cpor_registrationstatus: Active (154080000)
   cpor_compliancedeadline: 2025-01-17
@@ -327,7 +382,7 @@ Record 4:
   ComplianceDomain:     HEALTH
   cpor_legaltype:       Act (154080000)
   cpor_legislationname: Health Insurance Portability and Accountability Act - Security Rule
-  cpor_mandatory:       Yes
+  cpor_ismandatory:     Yes
   cpor_riskrating:      High (154080000)
   cpor_registrationstatus: Active (154080000)
   cpor_lastverifieddate: (today's date)

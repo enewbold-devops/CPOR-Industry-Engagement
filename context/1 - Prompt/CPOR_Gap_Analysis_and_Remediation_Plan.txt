@@ -1,0 +1,792 @@
+================================================================================
+CPOR INDUSTRY ENGAGEMENT — GAP ANALYSIS AND REMEDIATION PLAN
+================================================================================
+Date:       2026-06-21
+Author:     AI-assisted design review (GitHub Copilot / Claude Sonnet 4.6)
+Scope:      CPOR Global Industry Catalog — Industry Analyst workflow for
+            entering regulatory registrations via the 4-step wizard modal
+            and managing records through the BPF qualification pipeline.
+Environment: enewbold-sandbox.crm.dynamics.com
+             Dataverse OData Web API v9.2
+             Solution publisher prefix: 15408 (optionset int prefix 154080xxx)
+================================================================================
+
+
+================================================================================
+SECTION 1 — PROJECT BACKGROUND
+================================================================================
+
+The CPOR Global Industry Catalog is a 3-tier Dataverse extension layered on
+top of the existing CPOR Sales solution:
+
+  Tier 1 — TAXONOMY     cpor_IndustryCode, cpor_ComplianceDomain, Territory (OOB extended)
+  Tier 2 — CROSSWALK    cpor_IndustryDomainMap, cpor_TerritorySourceMap, cpor_RegulatorySource
+  Tier 3 — RESOLUTION   cpor_RegulatoryRegistration
+
+The resolution tier is the operational heart of the system. Industry Team
+analysts create and maintain cpor_RegulatoryRegistration records, which are
+consumed by the CPOR AI pipeline at Stage 0 to ground regulatory hypotheses
+for sellers.
+
+Key artifacts:
+  - Model Driven App: CPOR Industry Catalog
+  - BPF:             CPOR — Registration Qualification (5 stages)
+  - Power Automate:  4 Cloud Flows (Flows 1–4)
+  - Web Resources:   4 HTML pages + 7 JS modules
+  - Schema:          7 JSON schema files (see /schema/tables/)
+  - Design guides:   8 GII guides + 8 CRM guides (see /context/2 - Design/)
+
+The 4-step wizard (cpor_new_registration_dialog.js) is the primary intake
+mechanism for analysts creating new cpor_RegulatoryRegistration records.
+
+
+================================================================================
+SECTION 2 — GAP ANALYSIS
+================================================================================
+10 gaps were identified across the design documentation, schema, and code.
+Gaps are rated CRITICAL, HIGH, or MEDIUM based on operational impact.
+
+--------------------------------------------------------------------------------
+GAP 1 — No Research Initiation Context  [MEDIUM]
+--------------------------------------------------------------------------------
+Description:
+  The cpor_RegulatoryRegistration entity has no fields to capture how a
+  research need was identified, what market context motivated it, or who
+  requested it. This makes audit trails incomplete and prevents seller-demand
+  analytics.
+
+Impact:
+  - No way to trace whether a registration was created proactively (regulatory
+    monitoring) or reactively (seller request).
+  - No owner accountability for intake beyond the Dataverse OwnerId.
+  - Cannot measure which sellers are driving catalog expansion.
+
+Missing fields:
+  cpor_intakesource   (Choice — how the need was identified)
+  cpor_marketcontext  (Text — brief market context description)
+  cpor_requestedby    (Lookup → systemuser — who requested the research)
+
+Resolution: Phase E — add 8 new Intake and Sales Alignment fields.
+
+--------------------------------------------------------------------------------
+GAP 2 — Wizard Bypasses BPF Qualification  [CRITICAL]
+--------------------------------------------------------------------------------
+Description:
+  The 4-step wizard creates records via direct OData POST. Step 3 previously
+  exposed a status dropdown (cpor_registrationstatus) that allowed analysts
+  to select "Active" at intake, bypassing all 5 BPF stages and skipping the
+  Territory Manager approval gate.
+
+Impact:
+  - Records could enter the pipeline as Active without TM approval.
+  - Pipeline hypothesis grounding could use unverified registrations.
+  - BPF data integrity is meaningless if status can be set freely at create.
+
+Root cause:
+  cpor_new_registration_dialog.js step3HTML() rendered STATUS_OPTS as a
+  <select> element. buildPayload() passed the user-selected value directly.
+
+Resolution: Phase A
+  - Removed status dropdown from step3HTML().
+  - Added informational notice banner explaining Pending-only intake.
+  - Hardcoded cpor_registrationstatus = 154080002 (Pending) in buildPayload().
+
+--------------------------------------------------------------------------------
+GAP 3 — TM Handoff Fragile  [MEDIUM]
+--------------------------------------------------------------------------------
+Description:
+  When a registration reaches BPF Stage 4 (Pending TM Review), Flow 4 routes
+  an approval to territory.managerid. Three weaknesses exist:
+  (a) No notification to the submitting analyst on approval or rejection.
+  (b) No SLA tracking — no field records when Stage 4 was submitted.
+  (c) No escalation if the TM does not respond (approval hangs indefinitely).
+
+Impact:
+  - Analyst has no visibility after submitting for TM review.
+  - TM inaction blocks pipeline grounding silently.
+  - No data to report on approval latency or SLA compliance.
+
+Resolution: Phase E — Flow 4 enhancements:
+  - Added cpor_stage4submitteddate stamp (Step 1b in Flow 4).
+  - Added 7-day parallel timeout branch with escalation notification.
+  - Added analyst notification on both approval and rejection outcomes.
+
+--------------------------------------------------------------------------------
+GAP 4 — No Duplicate Check in Wizard  [HIGH]
+--------------------------------------------------------------------------------
+Description:
+  The wizard performs no pre-flight duplicate check before POSTing to
+  Dataverse. HTTP 412 errors from Dataverse's duplicate detection rules are
+  caught only generically (any error → "An unexpected error occurred."), giving
+  analysts no actionable guidance.
+
+Impact:
+  - Duplicate registrations can proliferate if the analyst does not manually
+    search before creating.
+  - The error message on HTTP 412 gives no context about which existing records
+    conflict.
+
+Resolution: Phase A
+  - Added checkDuplicate() — async OData query filtering on
+    _cpor_industrycode_value + _cpor_territory_value + _cpor_compliancedomain_value
+    (excluding Superseded records).
+  - Added showDuplicateWarning() — modal overlay listing conflicting records
+    with Cancel / Create Anyway options.
+  - Refactored handleSave() to orchestrate duplicate check → warning → doCreate().
+  - Added specific 412/DuplicateRecord error handling in doCreate() with a
+    clear, actionable message.
+
+--------------------------------------------------------------------------------
+GAP 5 — No Crosswalk Context in Wizard  [HIGH]
+--------------------------------------------------------------------------------
+Description:
+  Step 1 of the wizard collects Industry Code + Territory + Compliance Domain,
+  but provides no feedback showing whether the selected Compliance Domain is
+  mapped to the selected Industry Code in cpor_IndustryDomainMap. Analysts may
+  create registrations for domain-industry combinations that have no crosswalk
+  entry, weakening the catalog's structure.
+
+Impact:
+  - Silent omission: no warning when a domain is not in the industry crosswalk.
+  - Analysts who are unfamiliar with the crosswalk structure may create
+    orphaned registrations.
+
+Resolution: Phase B
+  - Added loadCrosswalkContext() — fetches cpor_IndustryDomainMap rows for the
+    selected industry code (cached per industry).
+  - Added renderCrosswalkCtx() — displays a context panel below the taxonomy
+    selects showing:
+      - Green tick if the selected domain is in the crosswalk (with priority).
+      - Amber warning if the domain is NOT in the crosswalk.
+      - Amber warning if no domains are mapped to the industry at all.
+      - List of all mapped domains for the industry, with priority badges.
+  - Added hideCrosswalkCtx() — clears the panel when fields are incomplete.
+  - Updated step1HTML() to inject the #cpor-wiz-ctx panel.
+  - Updated onStep1Input() to reset the cache on industry change and call
+    loadCrosswalkContext() on every Step 1 input event.
+
+--------------------------------------------------------------------------------
+GAP 6 — Multi-Source Evidence Not Captured  [MEDIUM]
+--------------------------------------------------------------------------------
+Description:
+  cpor_regulatorysource is a single optional Lookup to cpor_RegulatorySource.
+  There is no mechanism to record supplementary reference URLs (e.g. multiple
+  regulatory body pages, enforcement notices, guidance documents).
+
+Impact:
+  - Analysts must choose a single "primary" source and lose other references.
+  - Verification quality is harder to assess without multiple citations.
+
+Resolution: Phase E
+  - Added cpor_additionalsourceurls (TextArea 2000) to the entity schema guide
+    and to CRM Guide 03 Section 3 (after Legislation URL).
+  - Added to wizard buildPayload().
+
+--------------------------------------------------------------------------------
+GAP 7 — No Seller Feedback Loop  [LOW — DEFERRED]
+--------------------------------------------------------------------------------
+Description:
+  Sellers consuming pipeline output cannot flag a regulatory hypothesis as
+  incorrect, outdated, or irrelevant to their account context. There is no
+  in-product mechanism to surface seller feedback back to Industry Team
+  analysts for catalog correction.
+
+Impact:
+  - Catalog quality degrades silently over time if sellers cannot signal errors.
+  - Industry analysts have no data on which registrations are generating
+    inaccurate hypotheses.
+
+Resolution: Phase F (deferred)
+  - Requires cpor_Hypothesis entity changes and pipeline team coordination.
+  - Out of scope for this remediation cycle.
+
+--------------------------------------------------------------------------------
+GAP 8 — No Sales Motion Relevance Fields  [MEDIUM]
+--------------------------------------------------------------------------------
+Description:
+  cpor_RegulatoryRegistration has no fields linking a regulation to Microsoft
+  solution areas, buyer personas, or seller-ready narrative. Analysts cannot
+  annotate registrations with the sales context that would help sellers use the
+  catalog most effectively.
+
+Impact:
+  - Sellers receive a regulation name and applicability rule but no Microsoft
+    framing.
+  - Sales leaders cannot segment the catalog by solution area or buyer persona.
+
+Resolution: Phase E
+  - Added cpor_solutionarea (Text 100), cpor_buyerpersona (Text 100),
+    cpor_salesnarrative (TextArea 500) to the entity and wizard.
+  - Added Section 7 "Sales Alignment" to the CRM Guide 03 form layout.
+
+--------------------------------------------------------------------------------
+GAP 9 — Field Name Mismatches in Design Guides  [HIGH]
+--------------------------------------------------------------------------------
+Description:
+  Multiple implementation guides reference field names that do not match the
+  deployed schema. The deployed names are the correct ones (confirmed from
+  schema JSON files); the guide names are earlier working names that were
+  changed before or during deployment but the guides were not updated.
+
+  GUIDE NAME (incorrect)   →   DEPLOYED NAME (correct)
+  ─────────────────────────────────────────────────────
+  cpor_analystnotes        →   cpor_regulatorynotes
+  cpor_approvedby          →   cpor_verifiedby
+  cpor_mandatory           →   cpor_ismandatory
+  cpor_status              →   cpor_registrationstatus
+  cpor_industrycodeid      →   cpor_industrycode  (FK logical name)
+  cpor_territoryid         →   cpor_territory     (FK logical name)
+  cpor_compliancedomainid  →   cpor_compliancedomain (FK logical name)
+  cpor_regulatorysourceid  →   cpor_regulatorysource (FK logical name)
+
+  Additionally, the Stage 0 OData query in GII Guide 04 used wrong attribute
+  names:
+    _cpor_industrycodeid_value  →  _cpor_industrycode_value
+    _cpor_territoryid_value     →  _cpor_territory_value
+    cpor_compliancedomainid($select=...) in $expand → cpor_ComplianceDomain(...)
+    cpor_territoryid($select=...)        in $expand → cpor_Territory(...)
+    cpor_territoryid/cpor_jurisdictionlevel in $orderby → cpor_Territory/cpor_jurisdictionlevel
+
+  Business Rules in CRM Guide 05 referenced wrong field names:
+    BR1: disable list used cpor_industrycodeid, cpor_mandatory, etc.
+    BR1: FIELD THAT REMAINS EDITABLE referenced cpor_analystnotes
+    BR2: condition used cpor_mandatory instead of cpor_ismandatory
+    Both BRs: cpor_status used instead of cpor_registrationstatus
+
+Impact:
+  - Business Rules configured from these guides will reference non-existent
+    fields and silently fail to lock/require the intended fields.
+  - Data Import steps using wrong field names will fail.
+  - Any developer or admin following the guides will create incorrect
+    configurations.
+
+Resolution: Phase C
+  - GII Guide 04: all field name corrections applied.
+  - CRM Guide 03: header field, Section 1 FK names, Section 4 field names,
+    Section 6 stale deployment note removed.
+  - CRM Guide 05: BR1 condition, disable list, editable field, verification
+    steps; BR2 condition and portal steps.
+  - CRM Guide 07: Added FIELD NAME REFERENCE TABLE to PREREQUISITE section.
+
+--------------------------------------------------------------------------------
+GAP 10 — Freshness Gate Inconsistency  [MEDIUM]
+--------------------------------------------------------------------------------
+Description:
+  GII Guide 00 Decision 7 stated "90 days (configurable)" as the catalog
+  freshness threshold. All code (cpor_xrm_client.js isStale function), all
+  flows, and all CRM guides consistently use 180 days. The GII Guide 00 figure
+  was a stale draft value.
+
+  Additionally, GII Guide 00 listed "(6)" new optionsets, but 8 had actually
+  been defined (cpor_regulatortype #7 and cpor_registrationstatus #8 added
+  after the overview was last updated). After Phase E, the count is 9.
+
+Impact:
+  - Administrators configuring Business Rules from the guide would set the
+    wrong freshness threshold.
+  - The optionset count discrepancy causes confusion when deploying.
+
+Resolution: Phase D
+  - GII Guide 00: Decision 7 corrected to 180 days with env var reference.
+  - GII Guide 00: Optionset count corrected to 9; added cpor_regulatortype and
+    cpor_registrationstatus entries with value counts and descriptions.
+  - CRM Guide 00: Cross-reference updated to cite Decision 7 and
+    CATALOG_FRESHNESS_DAYS environment variable.
+
+--------------------------------------------------------------------------------
+ADDITIONAL ISSUES FOUND DURING SCHEMA REVIEW
+--------------------------------------------------------------------------------
+
+  A1. IsBusinessProcessEnabled = false on cpor_RegulatoryRegistration
+      Must be set to true before creating the BPF. Steps added to CRM Guide 07
+      ENTITY PREREQUISITE section.
+
+  A2. cpor_approvaldate NOT YET DEPLOYED
+      Referenced in BPF Stage 4 and Flow 4 but not yet created in the solution.
+      Must be created (Date Only, schema name cpor_ApprovalDate) before
+      configuring BPF Stage 4 and Flow 4 Step 6a.
+
+  A3. Ownership model mismatch
+      cpor_IndustryCode, cpor_ComplianceDomain, and cpor_IndustryDomainMap are
+      OrganizationOwned in the deployed schema JSON but the guides specified
+      UserOwned. The deployed schema is authoritative.
+
+  A4. Audit disabled on cpor_IndustryCode and cpor_ComplianceDomain
+      No audit trail for taxonomy record changes. Noted for future hardening.
+
+  A5. GII Guide 01 POST-DEPLOYMENT STEPS referenced "8 Choices" — updated to 9
+      after Phase E added the cpor_intakesource optionset.
+
+
+================================================================================
+SECTION 3 — REMEDIATION PLAN
+================================================================================
+Six phases. Phases A–E were implemented in this session. Phase F is deferred.
+
+Phase   Priority   Scope                             Status
+──────  ─────────  ────────────────────────────────  ──────────────────────────
+A       CRITICAL   JS BPF integrity + dup check      COMPLETE (2026-06-21)
+B       HIGH       JS crosswalk context panel        COMPLETE (2026-06-21)
+C       HIGH       Field name corrections in guides  COMPLETE (2026-06-21)
+D       MEDIUM     Freshness gate consistency        COMPLETE (2026-06-21)
+E       MEDIUM     New intake + sales fields          COMPLETE (2026-06-21)
+F       LOW        Seller feedback loop              DEFERRED
+
+--------------------------------------------------------------------------------
+PHASE A — BPF Integrity and Duplicate Check
+--------------------------------------------------------------------------------
+Addresses: Gaps 2, 4
+File:      webresources/js/cpor_new_registration_dialog.js
+
+Changes:
+  1. step3HTML()
+     - Removed cpor_registrationstatus <select> element and STATUS_OPTS block.
+     - Added .cpor-wiz-notice info banner explaining Pending-only intake and
+       the BPF qualification requirement.
+
+  2. buildPayload()
+     - Hardcoded: pay.cpor_registrationstatus = 154080002;
+       Comment: "Always Pending — BPF qualification required before Active"
+     - Removed the parseInt(d.cpor_registrationstatus) line.
+
+  3. checkDuplicate(industryId, territoryId, domainId) [new function]
+     - OData GET against cpor_regulatoryregistrations with filter:
+       _cpor_industrycode_value eq {id}
+       and _cpor_territory_value eq {id}
+       and _cpor_compliancedomain_value eq {id}
+       and cpor_registrationstatus ne 154080001 (excludes Superseded)
+     - Returns Promise<records[]>. Empty array if any FK is missing.
+
+  4. showDuplicateWarning(matches, callback) [new function]
+     - Creates an absolutely positioned overlay on .cpor-wiz-modal.
+     - Lists conflicting record names.
+     - Provides Cancel (callback(false)) and Create Anyway (callback(true)) buttons.
+
+  5. handleSave() [refactored]
+     - Now calls checkDuplicate() first (button shows "Checking…").
+     - On matches → calls showDuplicateWarning() → user decides.
+     - On no matches or duplicate check error → calls doCreate() directly.
+
+  6. doCreate(btn, err) [new function, split from handleSave]
+     - Contains the actual CporXrm.createRecord() call.
+     - Error handler checks e.status === 412 or e.message contains
+       'DuplicateRecord' and returns a specific, actionable message.
+
+  7. injectStyles() additions
+     - .cpor-wiz-notice: info banner with left brand-color border.
+     - .cpor-wiz-notice__icon: flex-shrink icon container.
+
+--------------------------------------------------------------------------------
+PHASE B — Crosswalk Context Panel
+--------------------------------------------------------------------------------
+Addresses: Gap 5
+File:      webresources/js/cpor_new_registration_dialog.js
+
+Changes:
+  1. Module-level state [new vars after _sources]
+     _crosswalkData        = null;   // fetched cpor_IndustryDomainMap rows
+     _crosswalkForIndustry = null;   // GUID the cache was fetched for
+
+  2. loadCrosswalkContext() [new function]
+     - Guards: returns if any of cpor_industrycode / territory / domain missing.
+     - Returns immediately if cache is valid for current industry code.
+     - Fetches cpor_industrydomainmaps with $expand=cpor_ComplianceDomain.
+     - On completion calls renderCrosswalkCtx() if industry code still matches.
+
+  3. renderCrosswalkCtx() [new function]
+     - Reads #cpor-wiz-ctx panel.
+     - Renders "No domains mapped" warning or match/no-match indicator +
+       full domain list with implementation priority badges (High/Medium/Low).
+
+  4. hideCrosswalkCtx() [new function]
+     - Hides and clears #cpor-wiz-ctx panel.
+
+  5. step1HTML()
+     - Appends <div id="cpor-wiz-ctx" class="cpor-wiz-crosswalk-ctx"
+       style="display:none"></div> after taxonomy selects.
+     - Appends Intake Source and Market Context fields (Phase E).
+
+  6. onStep1Input()
+     - Resets _crosswalkData and _crosswalkForIndustry on vertical or
+       industry code change.
+     - Calls loadCrosswalkContext() on every Step 1 change.
+
+  7. injectStyles() additions
+     - .cpor-wiz-crosswalk-ctx: context panel container.
+     - .cpor-wiz-ctx-match: green success text for matched domain.
+     - .cpor-wiz-ctx-warn: amber warning text for unmatched/unmapped domain.
+     - .cpor-wiz-ctx-domains: domain list container.
+     - .cpor-wiz-ctx-pri: priority badge base.
+     - .cpor-wiz-ctx-pri--high/medium/low: coloured priority badge variants.
+
+--------------------------------------------------------------------------------
+PHASE C — Field Name Corrections in Design Guides
+--------------------------------------------------------------------------------
+Addresses: Gap 9
+Files:
+  context/2 - Design/Global Industry Implementation/
+    Implementation Guide - 04 Resolution Entity.txt
+  context/2 - Design/Industry CRM Implementation/
+    Implementation Guide - 03 Forms.txt
+    Implementation Guide - 05 Business Rules.txt
+    Implementation Guide - 07 Business Process Flow.txt
+
+Changes:
+
+  GII Guide 04:
+  - FIELDS — GOVERNANCE: cpor_analystnotes → cpor_regulatorynotes.
+    Removed "(Previously: cpor_notes — renamed for clarity.)" note.
+    Updated DEPRECATED cpor_notes description.
+  - FIELDS — TERRITORY MANAGER APPROVAL: cpor_approvedby → cpor_verifiedby.
+    Display Name updated to "Verified By". Added deployment note.
+  - FIELDS — RISK AND STATUS: cpor_mandatory → cpor_ismandatory.
+    Added "Deployed as cpor_ismandatory." note.
+  - STAGE 0 QUERY: Fixed all FK attribute names:
+      _cpor_industrycodeid_value → _cpor_industrycode_value
+      _cpor_territoryid_value    → _cpor_territory_value
+    Fixed $expand paths:
+      cpor_compliancedomainid($select=...) → cpor_ComplianceDomain($select=...)
+      cpor_territoryid($select=...)        → cpor_Territory($select=...)
+    Fixed $select: cpor_mandatory → cpor_ismandatory
+    Fixed $orderby: cpor_territoryid/... → cpor_Territory/...
+  - DUPLICATE DETECTION RULE: cpor_industrycodeid → cpor_industrycode;
+    cpor_territoryid → cpor_territory.
+  - SEED DATA RECORDS: cpor_mandatory → cpor_ismandatory in all 4 records.
+
+  CRM Guide 03:
+  - HEADER FIELDS: cpor_status → cpor_registrationstatus.
+  - SECTION 1: FK display names corrected to deployed names.
+  - SECTION 4: cpor_mandatory → cpor_ismandatory.
+  - SECTION 6: cpor_analystnotes → cpor_regulatorynotes.
+    Removed the stale "NOTE ON cpor_analystnotes: add this field if not yet
+    in GII" paragraph entirely.
+
+  CRM Guide 05:
+  - PREREQUISITE: "cpor_analystnotes field" → "cpor_regulatorynotes field".
+  - BR1 CONDITION: cpor_status → cpor_registrationstatus with integer value.
+  - BR1 ACTION (disable list): all FK names and cpor_mandatory corrected.
+  - BR1 FIELD THAT REMAINS EDITABLE: cpor_analystnotes → cpor_regulatorynotes.
+  - BR1 VERIFICATION steps 1 and 3: corrected field references.
+  - BR2 PURPOSE line: cpor_mandatory → cpor_ismandatory.
+  - BR2 CONDITION: cpor_mandatory → cpor_ismandatory.
+  - BR2 PORTAL STEPS Step 2: Field reference corrected.
+  - FUTURE ENHANCEMENT: cpor_status → cpor_registrationstatus;
+    staleness threshold corrected to 180 days.
+
+  CRM Guide 07:
+  - Added FIELD NAME REFERENCE TABLE to PREREQUISITE section:
+    A definitive mapping of deployed names vs. earlier incorrect names,
+    covering all 8 commonly misused fields.
+
+--------------------------------------------------------------------------------
+PHASE D — Freshness Gate and Optionset Count Consistency
+--------------------------------------------------------------------------------
+Addresses: Gap 10
+Files:
+  context/2 - Design/Global Industry Implementation/
+    Implementation Guide - 00 Overview.txt
+    Implementation Guide - 01 Optionsets.txt (POST-DEPLOYMENT STEPS count)
+  context/2 - Design/Industry CRM Implementation/
+    Implementation Guide - 00 Overview.txt
+
+Changes:
+
+  GII Guide 00:
+  - Decision 7: "90 days (configurable)" → "180 days (configurable via
+    CATALOG_FRESHNESS_DAYS environment variable, default 180 if not set)".
+  - NEW OPTIONSETS: count corrected (6 → 9).
+  - Optionsets list: cpor_riskrating corrected to 4 values.
+    Added cpor_regulatortype (7 values) and cpor_registrationstatus (4 values).
+    (Count became 9 after Phase E added cpor_intakesource.)
+
+  GII Guide 01:
+  - POST-DEPLOYMENT STEPS Step 1: "8 Choices" → "9 Choices".
+
+  CRM Guide 00:
+  - Freshness gate cross-reference updated from "GII Guide 00" to
+    "GII Guide 00 Decision 7 (controlled by CATALOG_FRESHNESS_DAYS
+    environment variable, default 180 days)".
+
+--------------------------------------------------------------------------------
+PHASE E — New Intake and Sales Alignment Fields
+--------------------------------------------------------------------------------
+Addresses: Gaps 1, 3, 6, 8
+Files:
+  context/2 - Design/Global Industry Implementation/
+    Implementation Guide - 00 Overview.txt  (optionset count update)
+    Implementation Guide - 01 Optionsets.txt  (new Optionset 9)
+    Implementation Guide - 04 Resolution Entity.txt  (new fields section)
+  context/2 - Design/Industry CRM Implementation/
+    Implementation Guide - 03 Forms.txt  (form layout additions)
+    Implementation Guide - 06 Power Automate Flows.txt  (Flow 4 enhancements)
+  webresources/js/cpor_new_registration_dialog.js  (wizard additions)
+
+Guide changes:
+
+  GII Guide 01:
+  - Added OPTIONSET 9 — cpor_intakesource block:
+    6 values: Regulatory Alert (154080000) / Seller Request (154080001) /
+    Annual Review (154080002) / Partner Signal (154080003) /
+    Internal Analysis (154080004) / Other (154080005)
+    Includes full portal steps for creating the Choice column.
+
+  GII Guide 04:
+  - Added "FIELDS — INTAKE AND SALES ALIGNMENT" section before FIELDS — GOVERNANCE.
+    8 new fields documented with type, requiredness, and detailed notes:
+      cpor_intakesource        Choice (cpor_intakesource optionset)
+      cpor_marketcontext       Text (300)
+      cpor_requestedby         Lookup → systemuser
+      cpor_stage4submitteddate Date Only  (SLA tracking — stamped by Flow 4)
+      cpor_additionalsourceurls TextArea (2000)
+      cpor_solutionarea        Text (100)
+      cpor_buyerpersona        Text (100)
+      cpor_salesnarrative      TextArea (500)
+
+  CRM Guide 03:
+  - SECTION 1: Added cpor_requestedby (Requested By) to right column.
+  - SECTION 2: Added cpor_intakesource to right column of 2-column layout.
+    Added cpor_marketcontext as full-width field below.
+  - SECTION 3: Added cpor_additionalsourceurls (Additional Sources) full-width
+    between Legislation URL and Applicability Rule.
+  - SECTION 4: cpor_ismandatory corrected (Phase C overlap).
+  - SECTION 7 (new): Sales Alignment
+    Row 1: Solution Area (cpor_solutionarea) + Buyer Persona (cpor_buyerpersona)
+    Row 2: Sales Narrative (cpor_salesnarrative) full-width.
+
+  CRM Guide 06:
+  - Flow 4 STEP 1b (new): Stamp cpor_stage4submitteddate = utcNow('yyyy-MM-dd')
+    immediately after the Stage 4 trigger confirmation.
+  - Flow 4 STEP 5: Replaced "NOTE ON TIMEOUT" with full 7-day parallel branch
+    instructions including the escalation notification content.
+  - Flow 4 STEP 6a (Approved): Added analyst notification action.
+  - Flow 4 STEP 6b (Rejected): Added analyst notification action with
+    TM rejection comments forwarded to analyst.
+
+JavaScript changes (cpor_new_registration_dialog.js):
+
+  1. INTAKE_SOURCE_OPTS constant [new, after VERTICAL_OPTS]
+     6 options matching Optionset 9 values.
+
+  2. freshFormData()
+     Added 5 new fields:
+       cpor_intakesource: '', cpor_marketcontext: '',
+       cpor_solutionarea: '', cpor_buyerpersona: '', cpor_salesnarrative: ''
+
+  3. step1HTML()
+     After the crosswalk context panel (#cpor-wiz-ctx), added a 2-column row:
+       Left: Intake Source (cpor_intakesource) — INTAKE_SOURCE_OPTS select
+       Right: Market Context (cpor_marketcontext) — text input with hint
+
+  4. step4HTML()
+     After Regulatory Notes textarea, added:
+       HR divider
+       Intro paragraph (optional sales alignment context)
+       2-column row: Solution Area + Buyer Persona (text inputs)
+       Full-width: Sales Narrative (textarea, 3 rows, 500 chars)
+
+  5. buildReviewCard()
+     Added Intake Source and Market Context to Core Identity section.
+     Added Sales Alignment section (conditionally rendered):
+       Solution Area, Buyer Persona, Sales Narrative.
+
+  6. buildPayload()
+     Added:
+       if (d.cpor_intakesource !== '') { pay.cpor_intakesource = parseInt(...) }
+       if (d.cpor_marketcontext)       { pay.cpor_marketcontext = ... }
+       if (d.cpor_solutionarea)        { pay.cpor_solutionarea = ... }
+       if (d.cpor_buyerpersona)        { pay.cpor_buyerpersona = ... }
+       if (d.cpor_salesnarrative)      { pay.cpor_salesnarrative = ... }
+
+--------------------------------------------------------------------------------
+PHASE F — Seller Feedback Loop  [DEFERRED]
+--------------------------------------------------------------------------------
+Addresses: Gap 7
+Status: Out of scope for this cycle.
+
+Requires:
+  - New entity or subgrid on cpor_Hypothesis for seller feedback records.
+  - Pipeline team coordination to expose feedback UI in the seller-facing
+    hypothesis output.
+  - Workflow to route analyst-team review notifications from feedback.
+  - Potential changes to the CPOR Sales solution (outside Industry Team scope).
+
+
+================================================================================
+SECTION 4 — DEPLOYMENT PREREQUISITES CHECKLIST
+================================================================================
+
+Before deploying the solution changes to production, verify:
+
+  [ ] cpor_approvaldate (Date Only) column created on
+      cpor_RegulatoryRegistration (schema: cpor_ApprovalDate,
+      Display Name: "Approval Date") — required for Flow 4 and BPF Stage 4.
+
+  [ ] 9 new Choice columns created per GII Guide 01 (Optionsets 1–9).
+      Optionset 9 cpor_intakesource is new in this release.
+
+  [ ] 8 new fields from "FIELDS — INTAKE AND SALES ALIGNMENT" (GII Guide 04)
+      created on cpor_RegulatoryRegistration.
+
+  [ ] cpor_stage4submitteddate (Date Only) column created —
+      required for Flow 4 Step 1b SLA stamping.
+
+  [ ] IsBusinessProcessEnabled = true on cpor_RegulatoryRegistration
+      (required before creating the BPF — see CRM Guide 07 ENTITY PREREQUISITE).
+
+  [ ] BPF "CPOR — Registration Qualification" deployed and active.
+
+  [ ] Flow 4 "CPOR — Territory Manager Approval" updated with:
+      - Step 1b (cpor_stage4submitteddate stamp)
+      - 7-day parallel timeout branch
+      - Analyst notifications on approval and rejection
+
+  [ ] Business Rule 1 updated with corrected field names from Phase C
+      (cpor_registrationstatus, cpor_ismandatory, cpor_regulatorynotes, etc.)
+
+  [ ] Business Rule 2 updated with corrected field name (cpor_ismandatory).
+
+  [ ] Form updated per CRM Guide 03 (all 7 sections including new Section 7).
+
+  [ ] Web resource cpor_new_registration_dialog.js deployed.
+
+  [ ] optionSetMapper.js (pipeline function) updated with:
+      cpor_regulatortype, cpor_registrationstatus, cpor_intakesource.
+
+  [ ] CATALOG_FRESHNESS_DAYS environment variable set to 180 in the
+      Azure Function App configuration (or Dataverse environment variable
+      if using Power Platform managed env vars).
+
+
+================================================================================
+SECTION 5 — CANONICAL FIELD NAME REFERENCE
+================================================================================
+
+Use this table whenever configuring forms, Business Rules, Views, Flows, or
+writing OData queries. Deployed names are authoritative.
+
+DEPLOYED NAME              DISPLAY NAME         ENTITY                      NOTES
+─────────────────────────  ───────────────────  ──────────────────────────  ────────────────────────────────────
+cpor_industrycode          Industry Code        cpor_RegulatoryRegistration FK Lookup → cpor_IndustryCode
+cpor_territory             Territory            cpor_RegulatoryRegistration FK Lookup → territory (OOB)
+cpor_compliancedomain      Compliance Domain    cpor_RegulatoryRegistration FK Lookup → cpor_ComplianceDomain
+cpor_regulatorysource      Regulatory Source    cpor_RegulatoryRegistration FK Lookup → cpor_RegulatorySource
+cpor_regulatorynotes       Regulatory Notes     cpor_RegulatoryRegistration TextArea 4000
+cpor_verifiedby            Verified By          cpor_RegulatoryRegistration FK Lookup → systemuser
+cpor_ismandatory           Mandatory            cpor_RegulatoryRegistration Two Options (boolean)
+cpor_registrationstatus    Registration Status  cpor_RegulatoryRegistration Choice (Optionset 8)
+cpor_intakesource          Intake Source        cpor_RegulatoryRegistration Choice (Optionset 9) — NEW
+cpor_marketcontext         Market Context       cpor_RegulatoryRegistration Text 300 — NEW
+cpor_requestedby           Requested By         cpor_RegulatoryRegistration FK Lookup → systemuser — NEW
+cpor_stage4submitteddate   Stage 4 Submitted    cpor_RegulatoryRegistration Date Only — NEW
+cpor_additionalsourceurls  Additional Sources   cpor_RegulatoryRegistration TextArea 2000 — NEW
+cpor_solutionarea          Solution Area        cpor_RegulatoryRegistration Text 100 — NEW
+cpor_buyerpersona          Buyer Persona        cpor_RegulatoryRegistration Text 100 — NEW
+cpor_salesnarrative        Sales Narrative      cpor_RegulatoryRegistration TextArea 500 — NEW
+cpor_approvaldate          Approval Date        cpor_RegulatoryRegistration Date Only — NOT YET DEPLOYED
+
+OData FK attribute names (for $filter / $select):
+  _cpor_industrycode_value      (not _cpor_industrycodeid_value)
+  _cpor_territory_value         (not _cpor_territoryid_value)
+  _cpor_compliancedomain_value  (not _cpor_compliancedomainid_value)
+  _cpor_regulatorysource_value  (not _cpor_regulatorysourceid_value)
+
+OData navigation property names (for @odata.bind / $expand):
+  cpor_IndustryCode             (CamelCase navigation property)
+  cpor_Territory
+  cpor_ComplianceDomain
+  cpor_RegulatorySource
+  cpor_VerifiedBy
+  cpor_RequestedBy
+
+
+================================================================================
+SECTION 6 — OPTIONSET VALUES QUICK REFERENCE
+================================================================================
+
+Publisher prefix: 15408  →  Integer prefix: 154080
+
+cpor_registrationstatus  (Optionset 8)
+  154080000  Active
+  154080001  Superseded
+  154080002  Pending
+  154080003  Pending TM Review
+
+cpor_intakesource  (Optionset 9)
+  154080000  Regulatory Alert
+  154080001  Seller Request
+  154080002  Annual Review
+  154080003  Partner Signal
+  154080004  Internal Analysis
+  154080005  Other
+
+cpor_riskrating
+  154080000  High
+  154080001  Medium
+  154080002  Low
+  154080003  Informational
+
+cpor_legaltype
+  154080000  Act
+  154080001  Regulation
+  154080002  Directive
+  154080003  Standard
+  154080004  Guideline
+  154080005  Code of Practice
+
+cpor_regulatortype
+  154080000  Federal
+  154080001  State / Provincial
+  154080002  Supranational
+  154080003  Municipal
+  154080004  Industry Body
+  154080005  Self-Regulatory
+  154080006  International
+
+cpor_implementationpriority  (on cpor_IndustryDomainMap)
+  154080000  High
+  154080001  Medium
+  154080002  Low
+
+cpor_industrycloudvertical  (on cpor_IndustryCode)
+  154080000  Financial Services
+  154080001  Healthcare and Life Sciences
+  154080002  Manufacturing and Mobility
+  154080003  Retail and Consumer Goods
+  154080004  Government and Sustainability
+  154080005  Media and Telecoms
+
+
+================================================================================
+SECTION 7 — FILES MODIFIED IN THIS SESSION
+================================================================================
+
+  webresources/js/cpor_new_registration_dialog.js
+    Phases A, B, E — wizard BPF integrity, dup check, crosswalk context,
+    new intake and sales fields, INTAKE_SOURCE_OPTS constant.
+
+  context/2 - Design/Global Industry Implementation/
+    Implementation Guide - 00 Overview.txt
+      Phase D — Decision 7 freshness gate, optionset count.
+    Implementation Guide - 01 Optionsets.txt
+      Phase E — Optionset 9 cpor_intakesource.
+    Implementation Guide - 04 Resolution Entity.txt
+      Phase C — field name corrections, Stage 0 query.
+      Phase E — new FIELDS — INTAKE AND SALES ALIGNMENT section.
+
+  context/2 - Design/Industry CRM Implementation/
+    Implementation Guide - 00 Overview.txt
+      Phase D — freshness gate cross-reference.
+    Implementation Guide - 03 Forms.txt
+      Phase C — header fields, Section 1 and 4 FK names, Section 6 rename.
+      Phase E — Section 1 cpor_requestedby, Section 2 intake fields,
+                 Section 3 additional sources, Section 7 (new).
+    Implementation Guide - 05 Business Rules.txt
+      Phase C — BR1 and BR2 field name corrections throughout.
+    Implementation Guide - 06 Power Automate Flows.txt
+      Phase E — Flow 4 Step 1b, 7-day timeout, analyst notifications.
+    Implementation Guide - 07 Business Process Flow.txt
+      Phase C — FIELD NAME REFERENCE TABLE added to PREREQUISITE.
+
+================================================================================
+END OF DOCUMENT
+================================================================================

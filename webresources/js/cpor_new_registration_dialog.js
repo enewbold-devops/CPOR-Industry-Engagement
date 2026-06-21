@@ -51,6 +51,16 @@ var CporNewRegistrationDialog = (function () {
         { v: 154080005, l: 'Media and Telecoms' }
     ];
 
+    var INTAKE_SOURCE_OPTS = [
+        { v: '',        l: '\u2014 Select source \u2014' },
+        { v: 154080000, l: 'Regulatory Alert' },
+        { v: 154080001, l: 'Seller Request' },
+        { v: 154080002, l: 'Annual Review' },
+        { v: 154080003, l: 'Partner Signal' },
+        { v: 154080004, l: 'Internal Analysis' },
+        { v: 154080005, l: 'Other' }
+    ];
+
     var STEPS = [
         'Core Identity',
         'Legislation & Regulator',
@@ -70,6 +80,8 @@ var CporNewRegistrationDialog = (function () {
     var _territories = [];
     var _domains     = [];
     var _sources     = [];
+    var _crosswalkData        = null;   // crosswalk rows for current industry code
+    var _crosswalkForIndustry = null;   // industry GUID the cache is valid for
 
     // ── CSS injection (once per page load) ───────────────────────
     function injectStyles() {
@@ -166,7 +178,24 @@ var CporNewRegistrationDialog = (function () {
             /* divider */
             '.cpor-wiz-divider{height:1px;background:var(--clr-stroke-2);margin:var(--sp-4) 0}',
             /* step intro text */
-            '.cpor-wiz-intro{font-size:var(--fs-sm);color:var(--clr-fg-2);margin:0 0 var(--sp-5)}'
+            '.cpor-wiz-intro{font-size:var(--fs-sm);color:var(--clr-fg-2);margin:0 0 var(--sp-5)}',
+            /* crosswalk context panel */
+            '.cpor-wiz-crosswalk-ctx{margin-top:var(--sp-3);padding:var(--sp-3) var(--sp-4);' +
+            'background:var(--clr-bg-2);border:1px solid var(--clr-stroke-2);' +
+            'border-radius:var(--r-m);font-size:var(--fs-xs);color:var(--clr-fg-2)}',
+            '.cpor-wiz-ctx-match{color:var(--clr-success-fg,#1e7e34);font-weight:var(--fw-medium);display:block;margin-bottom:4px}',
+            '.cpor-wiz-ctx-warn{color:var(--clr-warning-fg,#c8870a);font-weight:var(--fw-medium);display:block;margin-bottom:4px}',
+            '.cpor-wiz-ctx-domains{margin-top:4px}',
+            '.cpor-wiz-ctx-pri{display:inline-block;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px}',
+            '.cpor-wiz-ctx-pri--high{background:#fde8e8;color:#c0392b}',
+            '.cpor-wiz-ctx-pri--medium{background:#fef3cd;color:#856404}',
+            '.cpor-wiz-ctx-pri--low{background:#d1f5d3;color:#1e7e34}',
+            /* status notice banner */
+            '.cpor-wiz-notice{display:flex;align-items:flex-start;gap:var(--sp-2);' +
+            'padding:var(--sp-3) var(--sp-4);background:var(--clr-bg-3);' +
+            'border:1px solid var(--clr-stroke-2);border-left:3px solid var(--clr-brand);' +
+            'border-radius:var(--r-m);font-size:var(--fs-sm);color:var(--clr-fg-2);margin-bottom:var(--sp-5)}',
+            '.cpor-wiz-notice__icon{flex-shrink:0;font-size:16px;line-height:1.2}'
         ].join('');
 
         var el = document.createElement('style');
@@ -227,7 +256,12 @@ var CporNewRegistrationDialog = (function () {
             cpor_nextsignificantdate: '',
             cpor_lastverifieddate:    '',
             cpor_applicabilityrule:   '',
-            cpor_regulatorynotes:     ''
+            cpor_regulatorynotes:     '',
+            cpor_intakesource:        '',
+            cpor_marketcontext:       '',
+            cpor_solutionarea:        '',
+            cpor_buyerpersona:        '',
+            cpor_salesnarrative:      ''
         };
     }
 
@@ -278,6 +312,80 @@ var CporNewRegistrationDialog = (function () {
         if (selSrc) {
             selSrc.innerHTML = buildLookupOpts(_sources, 'cpor_regulatorysourceid', 'cpor_name', _formData.cpor_regulatorysource);
         }
+    }
+
+    // ── Crosswalk context (Step 1 advisory panel) ─────────────────
+    function loadCrosswalkContext() {
+        var d = _formData;
+        if (!d.cpor_industrycode || !d.cpor_territory || !d.cpor_compliancedomain) {
+            hideCrosswalkCtx();
+            return;
+        }
+        // Use cached data if available for this industry code
+        if (_crosswalkForIndustry === d.cpor_industrycode && _crosswalkData !== null) {
+            renderCrosswalkCtx();
+            return;
+        }
+        _crosswalkData = null;
+        _crosswalkForIndustry = d.cpor_industrycode;
+        CporXrm.fetchRecords('cpor_industrydomainmaps',
+            '$filter=' + encodeURIComponent('_cpor_industrycodeid_value eq ' + d.cpor_industrycode) +
+            '&$expand=cpor_ComplianceDomain($select=cpor_compliancedomainid,cpor_name)' +
+            '&$select=cpor_implementationpriority,cpor_industrydomainmapid&$top=50')
+            .then(function (result) {
+                _crosswalkData = result.records || [];
+                if (_formData.cpor_industrycode === _crosswalkForIndustry) {
+                    renderCrosswalkCtx();
+                }
+            })
+            .catch(function () { _crosswalkData = []; });
+    }
+
+    function renderCrosswalkCtx() {
+        var panel = document.getElementById('cpor-wiz-ctx');
+        if (!panel || !_crosswalkData) { return; }
+        var d = _formData;
+        if (!d.cpor_compliancedomain) { hideCrosswalkCtx(); return; }
+        var PRIORITY_LABEL = { '154080000': 'High', '154080001': 'Medium', '154080002': 'Low' };
+        var matched = null;
+        var allDomains = _crosswalkData.map(function (m) {
+            var dom = m.cpor_ComplianceDomain;
+            var domId = dom ? dom.cpor_compliancedomainid : null;
+            var isMatch = (domId === d.cpor_compliancedomain);
+            if (isMatch) { matched = m; }
+            return { name: dom ? dom.cpor_name : '\u2014', match: isMatch,
+                     priority: PRIORITY_LABEL[String(m.cpor_implementationpriority)] || '' };
+        });
+        if (allDomains.length === 0) {
+            panel.innerHTML = '<span class="cpor-wiz-ctx-warn">' +
+                '\u26a0 No compliance domains are mapped to this industry code in the crosswalk. ' +
+                'Verify the Industry Domain Map before proceeding.</span>';
+            panel.style.display = 'block';
+            return;
+        }
+        var indicator = matched
+            ? '<span class="cpor-wiz-ctx-match">\u2713 Compliance Domain is in the crosswalk' +
+              (matched.cpor_implementationpriority !== undefined
+                ? ' \u2014 Implementation Priority: ' + (PRIORITY_LABEL[String(matched.cpor_implementationpriority)] || '') : '') +
+              '</span>'
+            : '<span class="cpor-wiz-ctx-warn">\u26a0 Selected Compliance Domain is NOT in the ' +
+              'crosswalk for this industry. Verify before proceeding.</span>';
+        var domainList = allDomains.map(function (item) {
+            var priHtml = item.priority
+                ? ' <span class="cpor-wiz-ctx-pri cpor-wiz-ctx-pri--' + item.priority.toLowerCase() + '">' + item.priority + '</span>'
+                : '';
+            return '<li' + (item.match ? ' style="font-weight:600"' : '') + '>' +
+                esc(item.name) + priHtml + (item.match ? ' \u2190 selected' : '') + '</li>';
+        }).join('');
+        panel.innerHTML = indicator +
+            '<div class="cpor-wiz-ctx-domains"><strong>Mapped domains for this industry:</strong>' +
+            '<ul style="margin:4px 0 0;padding-left:18px">' + domainList + '</ul></div>';
+        panel.style.display = 'block';
+    }
+
+    function hideCrosswalkCtx() {
+        var panel = document.getElementById('cpor-wiz-ctx');
+        if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
     }
 
     // ── Collect form inputs → _formData ───────────────────────────
@@ -355,6 +463,15 @@ var CporNewRegistrationDialog = (function () {
             '<div class="cpor-wiz-row2">' +
             fld('Territory / Jurisdiction', true, sel('cpor_territory', terrOpts)) +
             fld('Compliance Domain', true, sel('cpor_compliancedomain', domOpts)) +
+            '</div>' +
+            '<div id="cpor-wiz-ctx" class="cpor-wiz-crosswalk-ctx" style="display:none"></div>' +
+            '<div class="cpor-wiz-row2">' +
+            fld('Intake Source', false,
+                sel('cpor_intakesource', buildOpts(INTAKE_SOURCE_OPTS, _formData.cpor_intakesource)),
+                'How was this regulation identified?') +
+            fld('Market Context', false,
+                inp('cpor_marketcontext', 'text', _formData.cpor_marketcontext),
+                'Brief context, e.g. "EU AI Act affecting FinServ"') +
             '</div>';
     }
 
@@ -387,12 +504,14 @@ var CporNewRegistrationDialog = (function () {
 
     // ── Step 3 ────────────────────────────────────────────────────
     function step3HTML() {
-        return '<div class="cpor-wiz-row2">' +
-            fld('Registration Status', false,
-                sel('cpor_registrationstatus', buildOpts(STATUS_OPTS, _formData.cpor_registrationstatus || '154080002'))) +
+        return '<div class="cpor-wiz-notice">' +
+            '<span class="cpor-wiz-notice__icon">ℹ</span> ' +
+            'New registrations are created as <strong>Pending</strong> and must advance ' +
+            'through the qualification workflow (BPF) before becoming Active. ' +
+            'Status cannot be set at intake.' +
+            '</div>' +
             fld('Risk Rating', false,
                 sel('cpor_riskrating', buildOpts(RISK_OPTS, _formData.cpor_riskrating))) +
-            '</div>' +
             '<div class="cpor-wiz-grp">' +
             '<label class="cpor-wiz-lbl">Mandatory Compliance</label>' +
             '<div class="cpor-wiz-tog-wrap">' +
@@ -413,9 +532,18 @@ var CporNewRegistrationDialog = (function () {
 
     // ── Step 4 ────────────────────────────────────────────────────
     function step4HTML() {
+        var d = _formData;
         return buildReviewCard() +
-            fld('Applicability Rule', false,  txta('cpor_applicabilityrule', _formData.cpor_applicabilityrule, 2000, 4)) +
-            fld('Regulatory Notes', false,    txta('cpor_regulatorynotes',   _formData.cpor_regulatorynotes,   4000, 5));
+            fld('Applicability Rule', false,  txta('cpor_applicabilityrule', d.cpor_applicabilityrule, 2000, 4)) +
+            fld('Regulatory Notes', false,    txta('cpor_regulatorynotes',   d.cpor_regulatorynotes,   4000, 5)) +
+            '<hr style="border:none;border-top:1px solid var(--clr-stroke-2);margin:var(--sp-5) 0">' +
+            '<p class="cpor-wiz-intro">Optional: Add sales alignment context to help sellers engage on this regulation.</p>' +
+            '<div class="cpor-wiz-row2">' +
+            fld('Solution Area', false, inp('cpor_solutionarea', 'text', d.cpor_solutionarea), 'e.g. Security, Compliance, Modern Work') +
+            fld('Buyer Persona', false, inp('cpor_buyerpersona', 'text', d.cpor_buyerpersona), 'e.g. CISO, DPO, CFO') +
+            '</div>' +
+            fld('Sales Narrative', false, txta('cpor_salesnarrative', d.cpor_salesnarrative, 500, 3),
+                'Brief talking point linking this regulation to a Microsoft value proposition.');
     }
 
     // ── Review card ───────────────────────────────────────────────
@@ -461,6 +589,12 @@ var CporNewRegistrationDialog = (function () {
         html += revRow('Industry Code',     lookupLabel(_allCodes,    'cpor_industrycodeid',    'cpor_name', d.cpor_industrycode));
         html += revRow('Territory',         lookupLabel(_territories, 'territoryid',             'name',      d.cpor_territory));
         html += revRow('Compliance Domain', lookupLabel(_domains,     'cpor_compliancedomainid', 'cpor_name', d.cpor_compliancedomain));
+        if (d.cpor_intakesource) {
+            html += revRow('Intake Source', optionLabel(INTAKE_SOURCE_OPTS, d.cpor_intakesource));
+        }
+        if (d.cpor_marketcontext) {
+            html += revRow('Market Context', d.cpor_marketcontext);
+        }
 
         var hasLeg = d.cpor_legislationname || d.cpor_legislationurl || d.cpor_legaltype ||
                      d.cpor_regulatorysource || d.cpor_regulatorbodyname || d.cpor_regulatortype;
@@ -484,6 +618,13 @@ var CporNewRegistrationDialog = (function () {
         html += revRow('Next Significant',    d.cpor_nextsignificantdate);
         html += revRow('Last Verified',       d.cpor_lastverifieddate);
 
+        if (d.cpor_solutionarea || d.cpor_buyerpersona || d.cpor_salesnarrative) {
+            html += revSection('Sales Alignment');
+            html += revRow('Solution Area',    d.cpor_solutionarea);
+            html += revRow('Buyer Persona',    d.cpor_buyerpersona);
+            html += revRow('Sales Narrative',  d.cpor_salesnarrative);
+        }
+
         html += '</div>';
         return html;
     }
@@ -495,7 +636,7 @@ var CporNewRegistrationDialog = (function () {
 
         // Required scalar
         pay.cpor_name               = d.cpor_name.trim();
-        pay.cpor_registrationstatus = parseInt(d.cpor_registrationstatus, 10) || 154080002;
+        pay.cpor_registrationstatus = 154080002; // Always Pending — BPF qualification required before Active
         pay.cpor_ismandatory        = !!d.cpor_ismandatory;
 
         // Optional picklists
@@ -510,6 +651,13 @@ var CporNewRegistrationDialog = (function () {
         if (d.cpor_regulatorwebsiteurl) { pay.cpor_regulatorwebsiteurl = d.cpor_regulatorwebsiteurl; }
         if (d.cpor_applicabilityrule)   { pay.cpor_applicabilityrule   = d.cpor_applicabilityrule; }
         if (d.cpor_regulatorynotes)     { pay.cpor_regulatorynotes     = d.cpor_regulatorynotes; }
+
+        // Intake and sales alignment
+        if (d.cpor_intakesource !== '')  { pay.cpor_intakesource  = parseInt(d.cpor_intakesource, 10); }
+        if (d.cpor_marketcontext)       { pay.cpor_marketcontext  = d.cpor_marketcontext; }
+        if (d.cpor_solutionarea)        { pay.cpor_solutionarea   = d.cpor_solutionarea; }
+        if (d.cpor_buyerpersona)        { pay.cpor_buyerpersona   = d.cpor_buyerpersona; }
+        if (d.cpor_salesnarrative)      { pay.cpor_salesnarrative = d.cpor_salesnarrative; }
 
         // Dates (pass as-is; Xrm.WebApi accepts YYYY-MM-DD for DateOnly fields)
         if (d.cpor_effectivedate)       { pay.cpor_effectivedate       = d.cpor_effectivedate; }
@@ -641,9 +789,17 @@ var CporNewRegistrationDialog = (function () {
         var vertEl = document.querySelector('[data-wiz-field="verticalFilter"]');
         if (vertEl && e.target === vertEl) {
             _formData.cpor_industrycode = '';
+            _crosswalkData = null;
+            _crosswalkForIndustry = null;
             repopulateStep1Selects();
         }
+        // Reset crosswalk cache when industry code changes
+        if (e.target && e.target.getAttribute('data-wiz-field') === 'cpor_industrycode') {
+            _crosswalkData = null;
+            _crosswalkForIndustry = null;
+        }
         updateNextState();
+        loadCrosswalkContext();
     }
 
     // ── Navigation handlers ───────────────────────────────────────
@@ -675,17 +831,86 @@ var CporNewRegistrationDialog = (function () {
         }
     }
 
+    // ── Duplicate check (pre-save) ────────────────────────────────
+    function checkDuplicate(industryId, territoryId, domainId) {
+        if (!industryId || !territoryId || !domainId) { return Promise.resolve([]); }
+        var filter = '_cpor_industrycode_value eq ' + industryId +
+            ' and _cpor_territory_value eq ' + territoryId +
+            ' and _cpor_compliancedomain_value eq ' + domainId +
+            ' and cpor_registrationstatus ne 154080001'; // exclude Superseded
+        return CporXrm.fetchRecords('cpor_regulatoryregistrations',
+            '$filter=' + encodeURIComponent(filter) +
+            '&$select=cpor_name,cpor_registrationstatus,cpor_regulatoryregistrationid&$top=5')
+            .then(function (result) { return result.records || []; });
+    }
+
+    function showDuplicateWarning(matches, callback) {
+        var listHtml = matches.map(function (m) {
+            return '<li>' + esc(m.cpor_name || m.cpor_regulatoryregistrationid) + '</li>';
+        }).join('');
+        var el = document.createElement('div');
+        el.id = 'cpor-wiz-dup-overlay';
+        el.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,.5);z-index:8100;' +
+            'display:flex;align-items:center;justify-content:center;border-radius:inherit';
+        el.innerHTML =
+            '<div style="background:var(--clr-bg-1);border-radius:var(--r-xl);padding:var(--sp-6);' +
+            'max-width:400px;width:90%;box-shadow:var(--shadow-16)">' +
+            '<p style="font-size:var(--fs-md);font-weight:var(--fw-semibold);color:var(--clr-fg-1);margin:0 0 var(--sp-3)">' +
+            '\u26a0\ufe0f Possible Duplicate Detected</p>' +
+            '<p style="font-size:var(--fs-sm);color:var(--clr-fg-2);margin:0 0 var(--sp-3)">' +
+            'These registrations already exist for this Industry \u00d7 Territory \u00d7 Domain:</p>' +
+            '<ul style="font-size:var(--fs-sm);color:var(--clr-fg-1);margin:0 0 var(--sp-4);padding-left:20px">' +
+            listHtml + '</ul>' +
+            '<p style="font-size:var(--fs-sm);color:var(--clr-fg-2);margin:0 0 var(--sp-5)">' +
+            'Create another registration for this combination anyway?</p>' +
+            '<div style="display:flex;gap:var(--sp-3);justify-content:flex-end">' +
+            '<button class="cpor-btn cpor-btn--subtle" id="cpor-dup-cancel">Cancel</button>' +
+            '<button class="cpor-btn cpor-btn--primary" id="cpor-dup-proceed">Create Anyway</button>' +
+            '</div></div>';
+        var modal = document.querySelector('.cpor-wiz-modal');
+        if (modal) { modal.style.position = 'relative'; modal.appendChild(el); }
+        document.getElementById('cpor-dup-cancel').addEventListener('click', function () {
+            el.parentNode.removeChild(el); callback(false);
+        });
+        document.getElementById('cpor-dup-proceed').addEventListener('click', function () {
+            el.parentNode.removeChild(el); callback(true);
+        });
+    }
+
     // ── Save ──────────────────────────────────────────────────────
     function handleSave() {
         collectStep();
 
         var btn = document.getElementById('cpor-wiz-next');
         var err = document.getElementById('cpor-wiz-err');
-        if (btn) { btn.disabled = true; btn.textContent = 'Saving\u2026'; }
+        if (btn) { btn.disabled = true; btn.textContent = 'Checking\u2026'; }
         if (err) { err.style.display = 'none'; }
 
-        var payload = buildPayload();
+        checkDuplicate(
+            _formData.cpor_industrycode,
+            _formData.cpor_territory,
+            _formData.cpor_compliancedomain
+        ).then(function (matches) {
+            if (matches && matches.length > 0) {
+                showDuplicateWarning(matches, function (proceed) {
+                    if (!proceed) {
+                        if (btn) { btn.disabled = false; btn.textContent = 'Save Registration'; }
+                        return;
+                    }
+                    doCreate(btn, err);
+                });
+            } else {
+                doCreate(btn, err);
+            }
+        }).catch(function () {
+            // Duplicate check failed — proceed with save (non-blocking)
+            doCreate(btn, err);
+        });
+    }
 
+    function doCreate(btn, err) {
+        if (btn) { btn.textContent = 'Saving\u2026'; }
+        var payload = buildPayload();
         CporXrm.createRecord('cpor_regulatoryregistration', payload)
             .then(function () {
                 closeDialog();
@@ -695,7 +920,15 @@ var CporNewRegistrationDialog = (function () {
             .catch(function (e) {
                 if (btn) { btn.disabled = false; btn.textContent = 'Save Registration'; }
                 if (err) {
-                    var msg = (e && e.message) ? e.message : 'An unexpected error occurred.';
+                    var msg;
+                    if (e && (e.status === 412 ||
+                            (e.message && e.message.indexOf('DuplicateRecord') !== -1))) {
+                        msg = 'A duplicate record was detected by Dataverse. ' +
+                            'Review existing registrations for this ' +
+                            'Industry \u00d7 Territory \u00d7 Domain combination.';
+                    } else {
+                        msg = (e && e.message) ? e.message : 'An unexpected error occurred.';
+                    }
                     err.textContent = msg;
                     err.style.display = 'block';
                 }
