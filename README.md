@@ -1,7 +1,7 @@
 # CPOR Industry Engagement — Global Industry Catalog
 
 > **CPOR Durable** · Dynamics 365 Sales · Dataverse Catalog Tier Extension + Industry CRM Layer  
-> Last updated: June 2026 · Architecture revision: Registration Qualification BPF + Territory Manager Approval Gate
+> Last updated: June 2026 · Architecture revision: Registration Qualification BPF + Territory Manager Approval Gate + Sales Research Agents
 
 ---
 
@@ -10,7 +10,7 @@
 | Audience | Key sections |
 |---|---|
 | **Account Executives** | [Why This Matters to Sellers](#why-this-matters-to-sellers) · [How Your Lead & Account Update Automatically](#how-your-lead--account-update-automatically) · [What You See on a Hypothesis](#what-you-see-on-a-hypothesis) |
-| **Territory Managers** | [Your Role: Approval Gate](#territory-manager-approval-gate) · [5-Stage Qualification Flow](#5-stage-registration-qualification-flow) · [Flow 4: TM Approval Automation](#flow-4--territory-manager-approval) |
+| **Territory Managers** | [Your Role: Approval Gate](#territory-manager-approval-gate) · [Sales Research Agents](#dynamics-365-sales-research-agents) · [5-Stage Qualification Flow](#5-stage-registration-qualification-flow) · [Flow 4: TM Approval Automation](#flow-4--territory-manager-approval) · [Flow 5: Health Report to AE](#flow-5--territory-compliance-health-report-to-ae) |
 | **IT Stakeholders** | [Solution Architecture](#solution-architecture) · [Data Model](#data-model) · [Integration Points](#integration-points) · [Security Model](#security-model) · [Implementation Roadmap](#implementation-roadmap) |
 | **Global Industry Team** | [CPOR Industry Catalog App](#cpor-industry-catalog-app) · [Catalog Health Dashboard](#catalog-health-dashboard) · [Registration Wizard](#registration-wizard--new-entry-dialog) · [All Guides](#implementation-guides-index) |
 
@@ -30,6 +30,7 @@
   - [Territory Manager Approval Gate](#territory-manager-approval-gate)
 - [How Your Lead & Account Update Automatically](#how-your-lead--account-update-automatically)
 - [What You See on a Hypothesis](#what-you-see-on-a-hypothesis)
+- [Dynamics 365 Sales Research Agents](#dynamics-365-sales-research-agents)
 - [Cross-Team Workflow](#cross-team-workflow)
 - [Power Automate Flows](#power-automate-flows)
 - [Industry Crosswalk Reference Data](#industry-crosswalk-reference-data)
@@ -242,8 +243,9 @@ erDiagram
         datetime cpor_compliancedeadline
         date    cpor_lastverifieddate
         datetime cpor_nextsignificantdate
-        lookup  cpor_verifiedby
-        date    cpor_approvaldate
+        date    cpor_stage4submitteddate
+        lookup  cpor_approvedby
+        date    cpor_approveddate
         string  cpor_regulatorynotes
         string  cpor_applicabilityrule
     }
@@ -382,7 +384,7 @@ stateDiagram-v2
     Draft --> TaxonomyValidation : Industry · Territory\nDomain confirmed
     TaxonomyValidation --> LegislationVerification : Crosswalk context\nreviewed
     LegislationVerification --> TerritoryApproval : Analyst stamps\nlastverifieddate\nstatus = Pending TM Review\nFlow 4 triggers
-    TerritoryApproval --> Activated : TM approves\nstatus = Active\ncpor_verifiedby set
+    TerritoryApproval --> Activated : TM approves\nstatus = Active\ncpor_approvedby set
     TerritoryApproval --> LegislationVerification : TM rejects\nstatus = Pending\nnotes appended
     Activated --> LegislationVerification : Flow 1 re-queues\nif stale > 180 days
     Activated --> [*] : Superseded\n(fields locked)
@@ -393,7 +395,7 @@ stateDiagram-v2
 | **1 — Draft** | Global Industry Team | `cpor_name`, `cpor_legislationname`, `cpor_legaltype` | Entry point for wizard-created records |
 | **2 — Taxonomy Validation** | Global Industry Team | `cpor_industrycode`, `cpor_territory`, `cpor_compliancedomain` | Sub-grids show domain/source crosswalk context; TM manager check |
 | **3 — Legislation Verification** | Global Industry Team | `cpor_legislationurl`, `cpor_riskrating`, `cpor_ismandatory`, `cpor_lastverifieddate` | **Re-entry point** for Flow 1 stale requeue and TM rejections |
-| **4 — Territory Approval** | **Territory Manager** | `cpor_verifiedby` (auto), `cpor_approvaldate` (auto) | TM approves or rejects via Flow 4 Approvals connector |
+| **4 — Territory Approval** | **Territory Manager** | `cpor_approvedby` (auto), `cpor_approveddate` (auto) | TM approves or rejects via Flow 4 Approvals connector |
 | **5 — Activated** | System (terminal) | `cpor_registrationstatus = Active` | Record visible to Stage 0 pipeline |
 
 ---
@@ -418,7 +420,7 @@ When an Industry Analyst completes verification of a regulatory registration and
 ```mermaid
 flowchart TD
     TM[Territory Manager\nreceives Approval request] --> D{Review\nregistration}
-    D -->|Approve| A1[Flow 4 sets\ncpor_registrationstatus = Active\ncpor_verifiedby = your user\ncpor_approvaldate = today\nBPF moves to Stage 5]
+    D -->|Approve| A1[Flow 4 sets\ncpor_registrationstatus = Active\ncpor_approvedby = your user\ncpor_approveddate = today\nBPF moves to Stage 5]
     A1 --> A2[Industry Team notified\nRecord enters pipeline grounding]
     D -->|Reject with comment| R1[Flow 4 sets\ncpor_registrationstatus = Pending\nYour comment appended to\ncpor_regulatorynotes\nBPF returns to Stage 3]
     R1 --> R2[Industry Team notified\nAnalyst re-verifies]
@@ -493,6 +495,172 @@ Clicking the `cpor_regulatoryregistrationid` link opens the full Registration re
 
 ---
 
+## Dynamics 365 Sales Research Agents
+
+The catalog and the BPF keep the regulatory data *trustworthy*. The **Sales Research Agents** make that data *conversational* — they let a Territory Manager (TM) and Account Executive (AE) ask plain-language questions and get grounded, territory-scoped answers without writing a single query.
+
+Three agents ship in this revision, each mapped to a distinct business function. All three are **built on Microsoft Copilot for Dynamics 365 Sales** (Copilot Studio authoring, surfaced in the Sales Hub), and all three are **read-only** — they surface, summarise, and brief, but they never change a registration. Every approve / reject / re-verify action stays in the Flow 4 approval email and the CPOR app form, behind the Field Security Profile.
+
+```mermaid
+flowchart LR
+    U([TM asks a question\nin Sales Hub Copilot]) --> A{Sales Research Agent}
+    A --> F1[Function 1\nTerritory Compliance\nRisk Monitor]
+    A --> F2[Function 2\nAccount Executive\nInsight Briefing]
+    A --> F3[Function 3\nApproval Queue\nSituational Awareness]
+    F1 --> D[(CPOR Catalog\nDataverse)]
+    F2 --> D
+    F3 --> D
+    F2 -. external .-> W[(Bing / LinkedIn\nresearch)]
+    D --> R([Grounded, territory-scoped\nnatural-language answer])
+    W --> R
+    style A fill:#0078d4,color:#fff
+    style R fill:#107c10,color:#fff
+```
+
+<details>
+<summary><strong>How the agents stay scoped to the right territories</strong> (identity, OR-chains, capacity)</summary>
+
+<br>
+
+Every agent answer is anchored to **the TM who is asking**. The traversal is the same OOB relationship chain Flow 5 uses:
+
+```mermaid
+flowchart LR
+    ME([Current user\ngetUserId]) --> T["territory\n_managerid_value = me"]
+    T --> R["cpor_regulatoryregistration\n_cpor_territory_value in my territories"]
+    R --> CD[cpor_compliancedomain]
+    R --> IC[cpor_industrycode]
+    T --> ACC["account\nterritoryid = my territory"]
+    ACC --> AE([account.ownerid = AE])
+```
+
+- **Identity anchor** — the agent resolves the signed-in user with `Xrm.Utility.getGlobalContext().getUserId()` (curly braces stripped). This is the same `getCurrentUserId()` helper added to `cpor_xrm_client.js` in GII Guide 11.
+- **Scope query** — `GET /territories?$filter=_managerid_value eq {userId}` returns the TM's territory GUIDs.
+- **No `$in` operator** — Dataverse Web API does not support `$in` on lookups, so registrations are filtered with an explicit **OR chain**: `_cpor_territory_value eq 'id1' or _cpor_territory_value eq 'id2' …`.
+- **Licensing & capacity** — the agents consume **Copilot message credits** (Copilot capacity). The Sales Qualification flavour requires **D365 Sales Premium**. Agents are created by a **System Customizer** in the Sales Hub and assigned the **CPOR Territory Manager** security role (GII Guide 08).
+
+</details>
+
+### The Risk × Time signal matrix
+
+Every agent reasons over the same two-axis model. Risk rating (mandatory vs optional) crossed with time urgency (deadline / staleness) produces four actionable quadrants:
+
+```mermaid
+quadrantChart
+    title Risk x Time — what each obligation deserves
+    x-axis Low urgency (>90 days / stable) --> High urgency (<90 days / stale)
+    y-axis Low risk (optional) --> High risk (mandatory)
+    quadrant-1 ESCALATE TO AE NOW (Flow 5)
+    quadrant-2 MONITOR (quarterly)
+    quadrant-3 ROUTINE (annual)
+    quadrant-4 REVIEW (weekly TM digest)
+```
+
+| Quadrant | Condition | Cadence | Channel |
+|---|---|---|---|
+| **ESCALATE TO AE NOW** | Mandatory **and** deadline within 90 days | Immediate | Flow 5 → AE Task |
+| **MONITOR** | Mandatory **and** deadline beyond 90 days | Quarterly | TM review |
+| **REVIEW** | Optional **and** last verified > 180 days | Weekly | TM digest |
+| **ROUTINE** | Optional **and** deadline beyond 90 days | Annual | TM review |
+
+### The three business functions
+
+<details>
+<summary><strong>Function 1 — Territory Compliance Risk Monitor</strong></summary>
+
+<br>
+
+**Business function:** Give the TM a standing, conversational view of compliance *risk* across every territory they manage — surfacing the high-risk, mandatory, and stale obligations that need attention this week.
+
+| Aspect | Detail |
+|---|---|
+| **What it answers** | "Which obligations in my territories are high-risk, mandatory, or overdue for re-verification?" |
+| **Data scope** | `territory`, `cpor_regulatoryregistration`, `cpor_compliancedomain`, `cpor_industrycode` |
+| **Reasoning** | Applies the Risk × Time matrix; ranks ESCALATE → MONITOR → REVIEW → ROUTINE |
+| **Mode** | Read-only; conversational; multi-territory comparison |
+
+**Starter prompts**
+- "What are the critical compliance obligations in my territories this week?"
+- "Compare regulatory risk across my territories."
+- "Which registrations are mandatory and due within 90 days?"
+- "Show me everything that hasn't been re-verified in over 180 days."
+
+</details>
+
+<details>
+<summary><strong>Function 2 — Account Executive Insight Briefing</strong></summary>
+
+<br>
+
+**Business function:** Turn territory-level compliance data into an **account-level briefing** an AE can take into a customer meeting — combining catalog facts with optional external research.
+
+| Aspect | Detail |
+|---|---|
+| **What it answers** | "What compliance obligations apply to *this account*, how urgent are they, and what should the AE do?" |
+| **Data scope** | `account`, `territory`, `cpor_regulatoryregistration`, `cpor_compliancedomain`, `cpor_industrycode`, `cpor_industrydomainmap` |
+| **AE resolution** | Identifies the AE via `account.ownerid` |
+| **External research** | May enrich with Bing / LinkedIn for company context |
+| **Privacy** | **Must not** disclose `cpor_regulatorynotes` (analyst jurisdiction notes) to non-TM users |
+
+**Briefing structure**
+1. **Account Overview** — industry, territory, owning AE
+2. **Applicable Compliance Obligations** — grounded registrations, with citations
+3. **Urgency Assessment** — Risk × Time quadrant per obligation
+4. **Recommended AE Action** — talking points for the conversation
+
+**Starter prompts**
+- "Prepare a compliance briefing for Contoso Ltd before my QBR tomorrow."
+- "What regulatory obligations should the AE raise with this account?"
+- "Give me three compliance talking points for the Fabrikam meeting."
+
+</details>
+
+<details>
+<summary><strong>Function 3 — Approval Queue Situational Awareness</strong></summary>
+
+<br>
+
+**Business function:** Replace the scattered Flow 4 approval emails with a single conversational view of *everything pending the TM's sign-off* — with SLA awareness and re-verification context.
+
+| Aspect | Detail |
+|---|---|
+| **What it answers** | "What's waiting on me, how long has it been waiting, and is anything overdue?" |
+| **Queue filter** | `cpor_registrationstatus eq 154080003` (Pending TM Review) scoped to the TM's territories |
+| **Days Pending** | `today − cpor_stage4submitteddate` |
+| **SLA** | **OVERDUE** if Days Pending > 7 (7 business-day target) |
+| **New vs re-verification** | **NEW** when `cpor_approveddate` is null; **re-verification** when `cpor_approveddate` / `cpor_approvedby` are already populated |
+| **Mode** | Read-only — the agent *describes* the queue; approval still happens in the Flow 4 email or the CPOR form |
+
+**Fields the TM writes (only via the approval surface, governed by the *CPOR TM Write Fields* Field Security Profile)**
+- `cpor_approvedby` — Lookup to `systemuser`
+- `cpor_approveddate` — Date Only
+- `cpor_regulatorynotes` — TextArea (caveats / rejection reason)
+- `cpor_registrationstatus` — Choice (Active on approve / Pending on reject)
+
+**Starter prompts**
+- "What's in my approval queue and what's overdue?"
+- "Which pending approvals are re-verifications versus brand-new registrations?"
+- "Sort my pending approvals oldest-first and flag anything past the 7-day SLA."
+
+</details>
+
+### Agents vs Flow 5 — complementary, not redundant
+
+The agents and Flow 5 both deliver compliance signal, but they serve different moments:
+
+| | **Sales Research Agents** | **Flow 5 — Health Report to AE** |
+|---|---|---|
+| **Interaction** | On-demand, conversational | Automated weekly push (+ on-demand button) |
+| **Audience** | TM (and AE, via briefing) | AE, in their Task queue |
+| **Output** | Natural-language answer / briefing | Dataverse **Task** on the Account |
+| **Strengths** | Multi-territory comparison, pre-meeting briefing, change delta, external research, talking points | Guaranteed delivery into the AE workspace, no app access required |
+| **Quadrant** | All four (especially MONITOR / REVIEW) | **ESCALATE TO AE NOW** |
+| **Write?** | Read-only | Creates Tasks only |
+
+> **In short:** Flow 5 *guarantees* the urgent signal reaches the AE; the agents let the TM *interrogate* the whole picture and brief the AE on demand.
+
+---
+
 ## Cross-Team Workflow
 
 ```mermaid
@@ -502,7 +670,7 @@ flowchart TD
     B[Flow 4: TM Approval\nRoutes to Territory Manager\nvia Teams Adaptive Card] -->|TM Approves| C
     B -->|TM Rejects + comment| A
 
-    C[Registration status = Active\ncpor_verifiedby = TM\ncpor_approvaldate = today] --> D
+    C[Registration status = Active\ncpor_approvedby = TM\ncpor_approveddate = today] --> D
 
     E[Account Executive\nSets OOB Industry on Lead\nSets Territory on Lead] -->|Flow 2 auto-syncs FK| F[Lead has\ncpor_industrycodeid set]
     F -->|Lead qualified → Account| G[Account inherits FK\nvia Flow 3]
@@ -533,7 +701,7 @@ flowchart TD
 
 ## Power Automate Flows
 
-All 4 flows are stored inside the CPOR solution. Ownership is assigned to a shared automation service account (`CPOR-Automation@contoso.com`) so flow ownership persists beyond individual user tenure.
+All 5 flows are stored inside the CPOR solution. Ownership is assigned to a shared automation service account (`CPOR-Automation@contoso.com`) so flow ownership persists beyond individual user tenure.
 
 ### Flow 1 — Stale Registration Weekly Digest
 
@@ -608,7 +776,7 @@ flowchart TD
     C2 -->|Yes| GM[Get TM user details\nemail + full name]
     GM --> AP[Start Approval\nRoute to TM email\nAdaptive Card with registration\ndetails + direct link]
     AP --> D{TM\nresponse}
-    D -->|Approved| A1[Update Registration:\ncpor_registrationstatus = Active 154080000\ncpor_verifiedby = TM user lookup\ncpor_approvaldate = today]
+    D -->|Approved| A1[Update Registration:\ncpor_registrationstatus = Active 154080000\ncpor_approvedby = TM user lookup\ncpor_approveddate = today]
     A1 --> A2[SetProcessStage → Stage 5 Activated\nSend confirmation to Industry Team]
     D -->|Rejected with comment| R1[Update Registration:\ncpor_registrationstatus = Pending 154080002\nAppend TM comment to cpor_regulatorynotes]
     R1 --> R2[SetProcessStage → Stage 3 Legislation Verification\nSend rejection notification to Industry Team]
@@ -619,6 +787,40 @@ flowchart TD
 - Flow requires **Premium connectors** (Approvals connector)
 - Environment variable `CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET` must be configured
 
+---
+
+### Flow 5 — Territory Compliance Health Report to AE
+
+> **New in this architecture revision.** This is the *outbound signal* that closes the loop between the Territory Manager's monitoring surface and the Account Executive's daily workspace. It fills the **ESCALATE TO AE NOW** quadrant of the Risk × Time matrix that no earlier flow addressed.
+
+```mermaid
+flowchart TD
+    T[Trigger: Recurrence\nEvery Monday 11:00 UTC\n+2h offset after Flow 1] --> TM[List rows: territories\nFilter: _managerid_value ne null]
+    T2[Instant trigger: HTTP POST\nTM presses 'Generate AE Report'\nin TM Health webresource] -.on-demand.-> TM
+    TM --> EACH[Apply to each territory]
+    EACH --> Q[List rows: cpor_regulatoryregistrations\nstatus = Active AND\n  mandatory + deadline within 90 days\n  OR high risk + stale > 90 days\n  OR created in last 7 days]
+    Q --> C1{Any relevant\nregistrations?}
+    C1 -->|No| SKIP[Terminate: Succeeded\nNo action for territory]
+    C1 -->|Yes| ACC[List rows: accounts\nFilter: _territoryid_value eq territory]
+    ACC --> C2{Any accounts\nin territory?}
+    C2 -->|No| SKIP2[Terminate: Succeeded]
+    C2 -->|Yes| EACHA[Apply to each account]
+    EACHA --> COMP[Compose compliance summary\nbullet list of obligations\nrisk + mandatory + deadline]
+    COMP --> TASK[Create Task on Account\nregardingobjectid = account\nownerid = account.ownerid AE\nscheduledend = today + 7 days\nprioritycode = High]
+    EACH --> NOTE[Notify TM:\nN tasks created across M accounts]
+```
+
+**Purpose:** Walks the OOB relationship chain `territory.managerid` (TM) → accounts in that territory (`account.territoryid`) → `account.ownerid` (AE), and drops a **Task** into each AE's Activity timeline summarising the compliance obligations that need account-team attention. The AE never has to open the CPOR Industry Catalog app — the signal comes to them in D365 Sales.
+
+**Two run modes:**
+- **Weekly automated** — Monday 11:00 UTC (offset +2h so Flow 1 stale processing finishes first).
+- **On-demand** — the TM presses **Generate AE Report** on the TM Health page; an instant HTTP-triggered flow runs the same logic scoped to that TM's territories.
+
+**Prerequisites:**
+- Accounts must have `territoryid` set; territories must have `managerid` set
+- No new fields required — entirely OOB relationship traversal
+- Uses standard Dataverse Task creation (no Premium connector required)
+
 ### Flow Summary
 
 | Flow | Trigger | Purpose | Premium? |
@@ -627,6 +829,7 @@ flowchart TD
 | CPOR — Lead Industry Code Auto-sync | Lead `industrycode` modified | Populate `cpor_industrycodeid` FK | No |
 | CPOR — Copy Industry Code to Account on Qualification | Account row added | Copy FK from source Lead to new Account | No |
 | CPOR — Territory Manager Approval | Registration `cpor_registrationstatus` modified | Route TM sign-off; activate or reject registrations | **Yes** |
+| CPOR — Territory Compliance Health Report to AE | Scheduled Mon 11:00 UTC + on-demand HTTP | Push compliance obligations to AE Task queue | No |
 
 ---
 
@@ -804,6 +1007,7 @@ graph TB
     subgraph ROLES["Dataverse Security Roles"]
         SA[System Administrator\nAll access — platform default]
         GIT[CPOR Global Industry Team\nCRUD Global — all 7 catalog entities\nRead Global — Hypothesis, Lead, Opp, Account]
+        TMR[CPOR Territory Manager\nRead Global — all 7 catalog entities\nWrite — 4 approval fields only\nvia Field Security Profile]
         ASP[CPOR Agent Service Principal\nRead Global — all 7 catalog entities\nCreate/Write — Hypothesis, WaveProject, Transcript]
         STM[CPOR Sales Team Member\nRead/Write — Lead, Opp, Account, Hypothesis\nNo direct catalog access]
     end
@@ -814,12 +1018,14 @@ graph TB
     end
 
     GIT --> ICA2
+    TMR -->|My Territory area| ICA2
     STM --> CSA2
     SA --> ICA2
     SA --> CSA2
     ASP -.->|API only — no app access| ICA2
 
     style GIT fill:#107c10,color:#fff
+    style TMR fill:#106ebe,color:#fff
     style STM fill:#0078d4,color:#fff
     style ASP fill:#767676,color:#fff
     style ICA2 fill:#107c10,color:#fff
@@ -835,6 +1041,23 @@ graph TB
 | Compliance Analyst | Curate registrations; stamp `cpor_lastverifieddate`; advance BPF through Stage 3 |
 | Industry Specialist | Maintain `cpor_IndustryDomainMap`; map industry codes to Cloud Verticals |
 | Data Steward | Run CSV imports; manage `cpor_TerritorySourceMap` and `cpor_RegulatorySource` |
+
+### CPOR Territory Manager role + Field Security Profile
+
+The **CPOR Territory Manager** role (GII Guide 08) gives the TM **Global Read** on all catalog entities and **Global Read** on Lead / Opportunity / Account for business context. Row-level scoping to the TM's own territories is enforced at the **view and webresource layer** (soft-scope, Phase 1), not at the Dataverse privilege layer.
+
+Write is intentionally Global at the role level but clamped to exactly **four fields** by the **`CPOR TM Write Fields` Field Security Profile** — because standard Dataverse roles cannot restrict Write to specific columns:
+
+| Field (TM may update) | Type |
+|---|---|
+| `cpor_approvedby` | Lookup → `systemuser` |
+| `cpor_approveddate` | Date Only |
+| `cpor_regulatorynotes` | TextArea |
+| `cpor_registrationstatus` | Choice |
+
+The TM **cannot** write `cpor_riskrating`, `cpor_ismandatory`, the taxonomy anchors (`cpor_industrycode`, `cpor_compliancedomain`, `cpor_territory`), or `cpor_legislationurl` — risk and classification remain analyst responsibilities. The TM's job is jurisdictional sign-off, not regulatory classification.
+
+> **Phase 2 upgrade path:** replace UI soft-scope with **Owner Teams per Territory** and switch the TM Write privilege from Global to Business Unit scope for true row-level security.
 
 ---
 
@@ -863,6 +1086,13 @@ gantt
     CRM 05 Business Rules               :crm05, after crm01, 1d
     CRM 06 Power Automate Flows         :crm06, after crm01, 2d
     CRM 07 Business Process Flow        :crm07, after crm06, 1d
+
+    section TM Remediation (Guides 08-12)
+    Guide 12 Schema Reconciliation      :g12, after crm07, 1d
+    Guide 08 TM Security Role           :g08, after g12, 1d
+    Guide 11 xrm_client Utilities       :g11, after g12, 1d
+    Guide 09 TM Health Webresource      :g09, after g08, 2d
+    Guide 10 Flow 5 Health Report       :g10, after g12, 1d
 ```
 
 ### Phase Dependency Map
@@ -889,9 +1119,20 @@ flowchart TD
         C6 --> C7[CRM 07\nBusiness Process Flow\nRequires IsBusinessProcessEnabled]
     end
 
+    subgraph TMG["Territory Manager Remediation"]
+        C7 --> T12[Guide 12\nSchema Reconciliation\nBLOCKING]
+        T12 --> T08[Guide 08\nTM Security Role]
+        T12 --> T11[Guide 11\nxrm_client Utilities]
+        T08 --> T09[Guide 09\nTM Health Webresource]
+        T11 --> T09
+        T12 --> T10[Guide 10\nFlow 5 -> AE]
+    end
+
     style G7 fill:#107c10,color:#fff
     style C1 fill:#0078d4,color:#fff
     style C7 fill:#106ebe,color:#fff
+    style T12 fill:#d83b01,color:#fff
+    style T09 fill:#106ebe,color:#fff
 ```
 
 ---
@@ -954,7 +1195,7 @@ Location: [`context/2 - Design/Global Industry Implementation/`](context/2%20-%2
 
 **Resolution (Tier 3):**
 
-- `cpor_RegulatoryRegistration` — core grounding record; FK to all 3 taxonomy entities; includes risk rating, legal type, dates, legislation URL, applicability rule, TM approval fields (`cpor_verifiedby`, `cpor_approvaldate`, `cpor_regulatorynotes`)
+- `cpor_RegulatoryRegistration` — core grounding record; FK to all 3 taxonomy entities; includes risk rating, legal type, dates, legislation URL, applicability rule, TM approval fields (`cpor_approvedby`, `cpor_approveddate`, `cpor_regulatorynotes`)
 
 </details>
 
@@ -1068,7 +1309,7 @@ Location: [`context/2 - Design/Industry CRM Implementation/`](context/2%20-%20De
 | **3 — Legislation Details** | Legal Type, Legislation Name (full), Legislation URL, Applicability Rule (multiline) |
 | **4 — Risk and Status** | Risk Rating, Mandatory, Registration Status |
 | **5 — Compliance Dates** | Effective Date, Compliance Deadline, **Last Verified Date** _(bold — primary operational field)_, Next Significant Date |
-| **6 — Territory Manager Approval** | Verified By (TM lookup), Approval Date (auto-set), Analyst/TM Notes |
+| **6 — Territory Manager Approval** | Approved By (`cpor_approvedby`, TM lookup), Approval Date (`cpor_approveddate`, auto-set), Stage 4 Submitted Date (`cpor_stage4submitteddate`), Analyst/TM Notes (`cpor_regulatorynotes`) |
 
 Sub-grids on form: Industry Domain Map (filtered by Industry Code), Territory Source Map (filtered by Territory), Active Registrations with same Territory+Domain (duplicate check).
 
@@ -1106,11 +1347,11 @@ HTML/JS web resource landing page (`cpor_catalog_health.html` + `cpor_catalog_he
 </details>
 
 <details>
-<summary><strong>CRM Guide 06 — Power Automate Flows (4 flows)</strong></summary>
+<summary><strong>CRM Guide 06 — Power Automate Flows (5 flows)</strong></summary>
 
 See [Power Automate Flows](#power-automate-flows) section above for full flow diagrams.
 
-All flows assigned to shared service account. Flow 4 (TM Approval) requires Premium Approvals connector.
+All flows assigned to shared service account. Flow 4 (TM Approval) requires Premium Approvals connector. Flow 5 (Health Report to AE) uses standard Dataverse Task creation — no Premium connector required.
 
 Environment variables required:
 - `CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET` — Teams webhook URL or email address for stale digest (Flow 1) and approval notifications (Flow 4)
@@ -1134,6 +1375,59 @@ Key BPF integration points with Power Automate:
 
 ---
 
+### Territory Manager Remediation (Guides 08–12)
+
+These guides extend the design from an approval-gated catalog into a **monitoring-capable** one for the Territory Manager. Guide 12 is **blocking** — it reconciles the schema naming conflicts (`cpor_verifiedby` → `cpor_approvedby`, `cpor_approvaldate` → `cpor_approveddate`) that would otherwise cause runtime failures.
+
+```mermaid
+flowchart LR
+    G12[Guide 12\nSchema Reconciliation\nBLOCKING] --> G08[Guide 08\nTM Security Role\n+ Field Security Profile]
+    G12 --> G11[Guide 11\nxrm_client.js\ngetCurrentUserId]
+    G08 --> G09[Guide 09\nTM Health\nWebresource]
+    G11 --> G09
+    G12 --> G10[Guide 10\nFlow 5 → AE]
+    style G12 fill:#d83b01,color:#fff
+    style G09 fill:#0078d4,color:#fff
+    style G10 fill:#106ebe,color:#fff
+```
+
+<details>
+<summary><strong>Guide 08 — CPOR Territory Manager Security Role</strong></summary>
+
+Defines the `CPOR Territory Manager` role (Global Read on all catalog + engagement entities), the `CPOR TM Write Fields` Field Security Profile (Write on `cpor_approvedby`, `cpor_approveddate`, `cpor_regulatorynotes`, `cpor_registrationstatus` only), the **My Territory** site map area, and two scoped views — **Pending My Approval** and **Approved by Me**. Soft-scope (UI filtering) in Phase 1; Owner Teams in Phase 2.
+
+</details>
+
+<details>
+<summary><strong>Guide 09 — TM Territory Health Webresource</strong></summary>
+
+`cpor_tm_health.html` / `cpor_tm_health.js` — a territory-scoped parallel to the Catalog Health dashboard. KPI tiles (My Territories, Active, Pending My Approval, Critical), per-territory breakdown, and three tabs: **Pending My Approval** (Days Pending = today − `cpor_stage4submitteddate`), **Approaching Deadlines**, **Stale in My Territories**. Hosts the **Generate AE Report** button that fires Flow 5 on demand.
+
+</details>
+
+<details>
+<summary><strong>Guide 10 — Flow 5: Territory Compliance Health Report to AE</strong></summary>
+
+The outbound signal flow documented in [Flow 5](#flow-5--territory-compliance-health-report-to-ae) above. Weekly (Mon 11:00 UTC) + on-demand; creates compliance Tasks on Accounts owned by the AE, walking `territory.managerid` → `account.territoryid` → `account.ownerid`.
+
+</details>
+
+<details>
+<summary><strong>Guide 11 — cpor_xrm_client.js: TM Identity & Territory Utilities</strong></summary>
+
+Adds `getCurrentUserId()` (`Xrm.Utility.getGlobalContext().getUserId()`, curly braces stripped), `getManagedTerritoryIds()`, and the OR-chain `buildTerritoryFilter()` helper — required because the Dataverse Web API has no `$in` operator on lookups. These power the territory scoping used by both the TM Health page and the Sales Research Agents.
+
+</details>
+
+<details>
+<summary><strong>Guide 12 — Schema Reconciliation and Corrections (BLOCKING)</strong></summary>
+
+The authoritative correction guide. Confirms the deployed logical names are **`cpor_approvedby`** and **`cpor_approveddate`** (not `cpor_verifiedby` / `cpor_approvaldate`), corrects every Flow 4 / BPF / form reference, fixes `cpor_additionalsources`, and specifies the new **`cpor_stage4submitteddate`** (Date Only) field that Flow 4 stamps on entry to Stage 4 for SLA tracking. Must be completed before deploying Guides 06, 08–11.
+
+</details>
+
+---
+
 ## User Experience Architecture
 
 ```mermaid
@@ -1144,24 +1438,25 @@ graph LR
         DS[Data Steward\nPrimary: CSV imports\nTerritorySourceMap · Sources]
     end
 
-    subgraph TM["Territory Managers\n(CPOR Sales / Industry Team)"]
-        TMR[Territory Manager\nPrimary: Approval requests via Flow 4\nApprove or reject registrations]
+    subgraph TM["Territory Managers\n(CPOR Territory Manager role)"]
+        TMR[Territory Manager\nMy Territory area + TM Health page\nApprove/reject via Flow 4\nSales Research Agents Q&A]
     end
 
     subgraph ST["Sales Team\n(CPOR Sales Team Member role)"]
         SE[Seller\nLeads · Opportunities\nIndustry Code + Territory set on Lead]
-        AM[Account Manager\nAccounts · Hypothesis review\nRegulatory Grounding section]
+        AM[Account Manager\nAccounts · Hypothesis review\nRegulatory Grounding section\nFlow 5 compliance Tasks]
     end
 
     subgraph APPS["Model Driven Apps"]
-        ICA[CPOR Industry Catalog App\nDedicated — Industry Team only\nLanding: Catalog Health Dashboard]
+        ICA[CPOR Industry Catalog App\nIndustry Team + TM My Territory area\nLanding: Catalog Health Dashboard]
         CSA[CPOR Sales App\nSellers + Account Managers]
     end
 
     CA --> ICA
     IS --> ICA
     DS --> ICA
-    TMR -.->|Teams/email approval| ICA
+    TMR -->|My Territory + agents| ICA
+    TMR -.->|Flow 5 Tasks| AM
     SE --> CSA
     AM --> CSA
 
@@ -1187,12 +1482,15 @@ graph LR
 | 6 | Set `cpor_registrationstatus = Superseded` on a test record | All fields except Analyst Notes and Status lock (Business Rule 1) |
 | 7 | Set `cpor_ismandatory = Yes` on a test record | Compliance Deadline shows required indicator (Business Rule 2) |
 | 8 | Create registration via wizard; advance to Stage 3; set status = Pending TM Review | Flow 4 triggers; TM receives Teams/email approval request within 5 minutes |
-| 9 | TM approves via Teams card | Registration status = Active; `cpor_verifiedby` and `cpor_approvaldate` populated; BPF at Stage 5 |
+| 9 | TM approves via Teams card | Registration status = Active; `cpor_approvedby` and `cpor_approveddate` populated; BPF at Stage 5 |
 | 10 | TM rejects via Teams card | Registration status = Pending; TM comment appended to `cpor_regulatorynotes`; BPF returns to Stage 3 |
 | 11 | Set Lead `industrycode` = Financial and save | After 60 sec: `cpor_industrycodeid` populated (Flow 2) |
 | 12 | Qualify Lead to Account | After 60 sec: Account `cpor_industrycodeid` matches Lead (Flow 3) |
 | 13 | Run Flow 1 manually with a stale test record | Notification received at `CPOR_INDUSTRY_TEAM_NOTIFICATION_TARGET`; stale record status set to Pending; BPF at Stage 3 |
 | 14 | OData count verification | `GET /cpor_regulatoryregistrations?$filter=cpor_registrationstatus eq 154080000` returns only TM-approved records |
+| 15 | Log in as CPOR Territory Manager; open My Territory > TM Health | Page loads territory-scoped KPIs; non-approval fields are read-only (Field Security Profile) |
+| 16 | Run Flow 5 with a mandatory registration due within 90 days | Task created on each Account in the territory, owned by the Account's AE, due in 7 days |
+| 17 | Ask a Sales Research Agent "What's in my approval queue and what's overdue?" | Agent returns Pending TM Review records scoped to the TM's territories, flagging items past the 7-day SLA |
 
 ### Quick Health Check (OData)
 
