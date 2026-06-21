@@ -71,7 +71,7 @@ var CporComponents = (function () {
                 ' onerror="this.style.display=\'none\'"' +
                 ' alt="Microsoft">' +
             '<div class="cpor-header__divider"></div>' +
-            '<span class="cpor-header__title">CPOR Industry Catalog</span>' +
+            '<span class="cpor-header__title">Industry Catalog</span>' +
             '<span class="cpor-header__subtitle">' + esc(opts.title || '') + '</span>' +
             '<div class="cpor-header__spacer"></div>' +
             '<div class="cpor-header__meta">' +

@@ -1,0 +1,828 @@
+================================================================================
+CPOR DURABLE — TERRITORY MANAGER
+Sales Research Agent: Analysis, Business Functions, and Configuration
+Date: 2026-06-21
+================================================================================
+
+PURPOSE
+-------
+This document captures the full analysis, design rationale, and Dynamics 365
+Sales Hub configuration for a Territory Manager Sales Research Agent built on
+Microsoft Copilot (Copilot Studio / D365 Sales Enterprise).
+
+It covers:
+  - Background: Copilot Capacity and Sales Research Agents in D365 Sales
+  - TM business function analysis and agent architecture
+  - Three fully configured agent business functions with all required
+    configuration fields for the Sales Hub agent builder
+  - Confirmed Dataverse table and column logical names from deployed schema
+  - Cross-function implementation notes
+
+This document is intended as input to agent configuration and as a companion
+to the Territory Manager role gap analysis document.
+
+
+================================================================================
+SECTION 1: BACKGROUND — COPILOT CAPACITY AND SALES RESEARCH AGENTS
+================================================================================
+
+DYNAMICS 365 SALES ENTERPRISE — COPILOT CAPACITY
+-------------------------------------------------
+Microsoft Copilot in Dynamics 365 Sales includes capabilities for creating
+AI-powered Sales Research Agents (also called Sales Qualification Agents or
+Autonomous Agents). These are built on Microsoft Copilot Studio and the
+Microsoft 365 Copilot platform.
+
+Key capabilities of Sales Research Agents:
+  - Account Research: surfaces news, financials, org changes, and insights
+  - Lead Qualification: researches and scores leads using internal CRM data
+    and external sources (Bing, LinkedIn)
+  - Opportunity Summaries: generates briefings before meetings
+  - Sales Qualification Agent: autonomously reaches out to and qualifies
+    inbound leads without seller intervention
+
+Copilot Capacity Licensing:
+  - Agents consume message credits (units of capacity) when performing actions
+  - Capacity is purchased via Copilot Studio capacity packs or included in
+    certain Dynamics 365 Sales Premium licenses
+  - The Sales Qualification Agent specifically requires D365 Sales Premium
+    or an add-on license
+
+In the Sales Hub, a System Customizer (Power Platform Developer) can create
+Sales Research Agents/Assistants directly from the Sales Hub configuration
+experience. These agents are surfaced to sellers and managers within the
+D365 Sales interface.
+
+
+================================================================================
+SECTION 2: TERRITORY MANAGER BUSINESS FUNCTION ANALYSIS
+================================================================================
+
+CONTEXT FROM CPOR DESIGN
+--------------------------
+The Territory Manager (TM) exists in the current CPOR design in exactly ONE
+functional capacity: as an email-based approver (Flow 4). Their entire
+designed touchpoint is:
+
+  1. Analyst completes BPF Stage 3, sets cpor_registrationstatus = 154080003
+     (Pending TM Review)
+  2. Flow 4 routes a Power Automate Approval to territory.managerid
+  3. TM receives approval email, clicks Approve or Reject
+
+The TM has no app role, no scoped views, no dashboard, and no defined channel
+back to Account Executives.
+
+THE CORE REQUIREMENT
+---------------------
+The Territory Manager must:
+  1. Monitor compliance risk and time-driven obligations for their territories
+  2. Provide metrics and evaluations to Account Executives so AEs can act on
+     compliance obligations relevant to their accounts
+
+THREE AGENT BUSINESS FUNCTIONS IDENTIFIED
+------------------------------------------
+Analysis of the TM's responsibilities produces three distinct business
+functions suitable for a Sales Research Agent:
+
+  Function 1: Territory Compliance Risk Monitor
+    Monitors active compliance obligations across managed territories.
+    Surfaces high-risk, mandatory, and stale registrations as prioritized
+    signals for proactive TM action.
+
+  Function 2: Account Executive Insight Briefing
+    Translates catalog risk signals into account-level intelligence.
+    Generates compliance-aware briefings the TM can communicate to AEs
+    before meetings, QBRs, or pipeline reviews.
+
+  Function 3: Approval Queue Situational Awareness
+    Provides a real-time, conversational view of the TM's pending approval
+    queue. Surfaces SLA status and re-verification context for each pending
+    registration — filling the gap of no aggregate approval queue in the
+    current design.
+
+AGENT ARCHITECTURE
+-------------------
+The agent traverses these Dataverse relationships for all three functions:
+
+  territory.managerid = TM (current user)
+      -> territory.territoryid
+          -> cpor_regulatoryregistration._cpor_territory_value
+              -> cpor_compliancedomain (domain context)
+              -> cpor_industrycode (vertical context)
+          -> account.territoryid (accounts in TM's territories)
+              -> account.ownerid (AE responsible for the account)
+                  -> compliance obligations relevant to that account
+
+KEY ARCHITECTURAL CONSTRAINTS
+------------------------------
+  - Territory scoping: Dataverse Web API does NOT support $in operator on
+    lookup fields. The agent's connector must use explicit OR chains:
+      _cpor_territory_value eq 'id1' or _cpor_territory_value eq 'id2'
+  - The agent is READ-ONLY for all three functions. Approve/reject actions
+    remain in the Power Automate approval email and CPOR app form.
+  - The agent must be assigned the CPOR Territory Manager security role
+    (Guide 08) to access CPOR catalog entities.
+  - The Field Security Profile (CPOR TM Write Fields) does not affect
+    agent read access — the agent reads all fields it has role-level
+    read privilege on.
+
+WHAT THE AGENT DOES THAT FLOW 5 CANNOT
+----------------------------------------
+  Flow 5 (weekly automated push) vs. Sales Research Agent (on-demand):
+
+  Capability                          Flow 5    Sales Research Agent
+  ----------------------------------  --------  -------------------
+  Weekly push to AE Task queue        Yes       No
+  On-demand conversational queries    No        Yes
+  Multi-territory comparison          No        Yes
+  Pre-meeting account briefing        No        Yes
+  Change delta on re-verification     No        Yes
+  External research (Bing/LinkedIn)   No        Yes (Copilot grounding)
+  Natural language AE talking points  No        Yes
+
+THE RISK + TIME SIGNAL MATRIX (applied to all three functions)
+---------------------------------------------------------------
+  The four-quadrant model used in the TM Health design is applied to
+  agent responses:
+
+                         LOW URGENCY             HIGH URGENCY
+                      (>90 days / stable)     (<90 days / stale)
+                   +----------------------+----------------------+
+  HIGH RISK        |  MONITOR             |  ESCALATE            |
+  (Mandatory)      |  Quarterly review    |  Immediate AE action |
+                   +----------------------+----------------------+
+  LOW RISK         |  ROUTINE             |  REVIEW              |
+  (Optional)       |  Annual review       |  Weekly TM digest    |
+                   +----------------------+----------------------+
+
+  ESCALATE: cpor_ismandatory = true AND cpor_compliancedeadline within 90 days
+  MONITOR:  cpor_ismandatory = true AND cpor_compliancedeadline beyond 90 days
+  REVIEW:   cpor_ismandatory = false AND cpor_lastverifieddate older than 180 days
+  ROUTINE:  cpor_ismandatory = false AND cpor_compliancedeadline beyond 90 days
+
+
+================================================================================
+SECTION 3: AGENT CONFIGURATION — FUNCTION 1
+Territory Compliance Risk Monitor
+================================================================================
+
+1. AGENT BUSINESS FUNCTION
+----------------------------
+Monitor active compliance obligations across the Territory Manager's assigned
+territories. Surface high-risk, mandatory, and stale registrations as
+prioritized signals so the TM can act before obligations lapse or escalate.
+
+2. AGENT INSTRUCTIONS
+----------------------
+You are a compliance risk monitoring assistant for a Territory Manager in
+Microsoft Dynamics 365 Sales. Your role is to help the Territory Manager
+understand the compliance health of their assigned sales territories.
+
+- Always scope your answers to the territories where the current user
+  is the assigned Territory Manager (territory.managerid = current user).
+- When summarizing risk, apply the four-quadrant model:
+    ESCALATE: cpor_ismandatory = true AND cpor_compliancedeadline within 90 days
+    MONITOR:  cpor_ismandatory = true AND cpor_compliancedeadline beyond 90 days
+    REVIEW:   cpor_ismandatory = false AND cpor_lastverifieddate older than 180 days
+    ROUTINE:  cpor_ismandatory = false AND cpor_compliancedeadline beyond 90 days
+- Prioritize ESCALATE items first, then MONITOR, then REVIEW, then ROUTINE.
+- For stale registrations, calculate staleness using cpor_lastverifieddate
+  compared to today. Registrations not verified in 180+ days are stale.
+- Always state the territory name, legislation name, risk rating,
+  whether it is mandatory, and the compliance deadline or last verified date
+  when summarizing a registration.
+- Do not surface registrations with cpor_registrationstatus = Inactive.
+- If the user asks about a specific territory, filter results to that
+  territory only.
+- When you cannot determine territory scope from the session, ask the user
+  which territory they want to review.
+
+3. BUSINESS CONTEXT
+--------------------
+The Territory Manager oversees regulatory compliance coverage for one or more
+assigned sales territories. Each territory contains active regulatory
+registrations that represent compliance obligations applicable to accounts in
+that jurisdiction. The TM is responsible for monitoring whether those
+obligations are current, properly verified, and flagged to Account Executives
+when action is required. Obligations that are mandatory and approaching a
+compliance deadline represent the highest business risk — failure to act can
+expose accounts to regulatory penalties. Stale registrations indicate that an
+obligation has not been reviewed in over 180 days and may no longer reflect
+current regulatory reality.
+
+4. DATA INSTRUCTIONS
+---------------------
+- Retrieve territories where managerid equals the current user's systemuserid.
+- For each territory, retrieve regulatory registrations where
+  cpor_territory matches the territory and cpor_registrationstatus
+  is Active (value: 154080000).
+- To identify ESCALATE items: cpor_ismandatory = true AND
+  cpor_compliancedeadline is within the next 90 days.
+- To identify STALE items: cpor_lastverifieddate is older than 180 days
+  from today.
+- To identify HIGH RISK items: cpor_riskrating = High (value: 154080000).
+- Join cpor_compliancedomain using cpor_compliancedomain lookup to
+  provide domain context (e.g., Data Privacy, Financial Regulation).
+- Join cpor_industrycode using cpor_industrycode lookup to provide
+  vertical context.
+- Sort ESCALATE results by cpor_compliancedeadline ascending
+  (soonest deadline first).
+- Sort STALE results by cpor_lastverifieddate ascending
+  (oldest verification first).
+- Limit result sets to 50 records per query to maintain response performance.
+
+5. STARTER PROMPTS
+-------------------
+  - What are the critical compliance obligations in my territories this week?
+  - Which of my territories has the most high-risk mandatory registrations?
+  - Show me all stale registrations across my territories that haven't been
+    verified in 6 months.
+  - Are there any mandatory obligations expiring in the next 90 days in the
+    Pacific Northwest territory?
+  - Give me a compliance health summary across all territories I manage.
+
+6. DATA SOURCE
+---------------
+Dataverse — CPOR Industry Catalog (same Dataverse environment as D365 Sales)
+
+7. TABLES AND COLUMNS CONFIGURATION
+-------------------------------------
+[
+  {
+    "tableName": "territory",
+    "columnNames": [
+      "territoryid",
+      "name",
+      "managerid",
+      "description",
+      "cpor_territorycode",
+      "cpor_jurisdictionlevel",
+      "cpor_isocountrycode",
+      "cpor_territorytype"
+    ]
+  },
+  {
+    "tableName": "cpor_regulatoryregistration",
+    "columnNames": [
+      "cpor_regulatoryregistrationid",
+      "cpor_name",
+      "cpor_territory",
+      "cpor_registrationstatus",
+      "cpor_riskrating",
+      "cpor_ismandatory",
+      "cpor_compliancedeadline",
+      "cpor_lastverifieddate",
+      "cpor_effectivedate",
+      "cpor_nextsignificantdate",
+      "cpor_legislationname",
+      "cpor_legislationurl",
+      "cpor_legaltype",
+      "cpor_compliancedomain",
+      "cpor_industrycode",
+      "cpor_applicabilityrule",
+      "cpor_regulatorynotes",
+      "cpor_additionalsources"
+    ]
+  },
+  {
+    "tableName": "cpor_compliancedomain",
+    "columnNames": [
+      "cpor_compliancedomainid",
+      "cpor_name",
+      "cpor_domaincode",
+      "cpor_typicalcoverage",
+      "cpor_commonregulatortypes"
+    ]
+  },
+  {
+    "tableName": "cpor_industrycode",
+    "columnNames": [
+      "cpor_industrycodeid",
+      "cpor_name",
+      "cpor_d365industrycode",
+      "cpor_industrycloudvertical"
+    ]
+  }
+]
+
+
+================================================================================
+SECTION 4: AGENT CONFIGURATION — FUNCTION 2
+Account Executive Insight Briefing
+================================================================================
+
+1. AGENT BUSINESS FUNCTION
+----------------------------
+Generate compliance-aware briefings about specific accounts or sets of
+accounts within the TM's territories. Translate catalog risk signals into
+actionable talking points that the TM can communicate to Account Executives
+before customer meetings, QBRs, or pipeline reviews.
+
+2. AGENT INSTRUCTIONS
+----------------------
+You are a sales intelligence assistant helping a Territory Manager prepare
+compliance-aware account briefings for Account Executives in
+Microsoft Dynamics 365 Sales.
+
+- When asked about an account, retrieve the account's assigned territory
+  and look up active regulatory registrations for that territory.
+- Match the account's industrycode (OOB D365 field) against cpor_industrycode
+  records to identify the most relevant compliance domains.
+- Structure every account briefing with these sections:
+    1. Account Overview (name, territory, industry, owner/AE)
+    2. Applicable Compliance Obligations (legislation name, domain,
+       risk rating, mandatory flag, deadline or last verified date)
+    3. Urgency Assessment (ESCALATE / MONITOR / REVIEW / ROUTINE)
+    4. Recommended AE Action (what the AE should discuss with the customer)
+- Always identify the Account Executive (account.ownerid) so the TM
+  knows who to contact.
+- When comparing multiple accounts, rank them by highest compliance
+  urgency first.
+- Do not disclose cpor_regulatorynotes content to non-TM users;
+  this field contains internal TM approval notes only.
+- If an account has no registered territory (territoryid is null),
+  note this as a data gap — the account cannot be mapped to compliance
+  obligations without territory assignment.
+- Keep briefings concise — use bullet points. Offer to expand on
+  any individual obligation if asked.
+
+3. BUSINESS CONTEXT
+--------------------
+Account Executives in D365 Sales manage customer accounts assigned to sales
+territories. Each territory has regulatory compliance obligations maintained
+in the CPOR Industry Catalog. The Territory Manager bridges the catalog and
+the AE — identifying which accounts are exposed to compliance obligations and
+ensuring AEs have the context needed to advise customers appropriately.
+
+An account briefing helps the AE walk into a customer meeting or QBR prepared
+to discuss applicable regulatory requirements, upcoming deadlines, and the
+Microsoft solution areas that address those compliance needs.
+
+The AE-to-account relationship is: account.ownerid (AE is the owner).
+The territory-to-TM relationship is: territory.managerid (TM is the manager).
+The account-to-territory relationship is: account.territoryid.
+
+4. DATA INSTRUCTIONS
+---------------------
+- Retrieve the account by name or accountid.
+- From account.territoryid, retrieve the territory record to confirm
+  territory name and the TM (managerid).
+- Retrieve active regulatory registrations where cpor_territory
+  matches account.territoryid AND cpor_registrationstatus = Active.
+- If account.industrycode is populated, cross-reference against
+  cpor_industrycode.cpor_d365industrycode to narrow the most relevant
+  compliance domains for that industry vertical.
+- For each registration, retrieve the linked cpor_compliancedomain
+  record for domain label and typical coverage description.
+- Identify the AE from account.ownerid (systemuser name).
+- Prioritize registrations where cpor_ismandatory = true.
+- Flag registrations where cpor_compliancedeadline is within 90 days
+  as URGENT.
+- Flag registrations where cpor_lastverifieddate is older than 180 days
+  as STALE — note this signals the obligation may need re-verification
+  before advising the customer.
+- When asked for multiple accounts in a territory, retrieve all accounts
+  where account.territoryid matches the territory, then apply the
+  registration lookup for each.
+
+5. STARTER PROMPTS
+-------------------
+  - Prepare a compliance briefing for Contoso Ltd before my QBR tomorrow.
+  - Which accounts in the Pacific Northwest territory have urgent compliance
+    obligations this quarter?
+  - Who are the Account Executives responsible for accounts with mandatory
+    GDPR obligations expiring in the next 60 days?
+  - Give me a list of accounts in my territories that are exposed to
+    high-risk mandatory regulations.
+  - What compliance obligations should the AE for Fabrikam Inc be aware
+    of right now?
+
+6. DATA SOURCE
+---------------
+Dataverse — CPOR Industry Catalog + D365 Sales (same environment)
+
+7. TABLES AND COLUMNS CONFIGURATION
+-------------------------------------
+[
+  {
+    "tableName": "account",
+    "columnNames": [
+      "accountid",
+      "name",
+      "territoryid",
+      "ownerid",
+      "industrycode",
+      "revenue",
+      "numberofemployees",
+      "description",
+      "address1_country",
+      "address1_stateorprovince"
+    ]
+  },
+  {
+    "tableName": "territory",
+    "columnNames": [
+      "territoryid",
+      "name",
+      "managerid",
+      "cpor_territorycode",
+      "cpor_jurisdictionlevel",
+      "cpor_isocountrycode"
+    ]
+  },
+  {
+    "tableName": "cpor_regulatoryregistration",
+    "columnNames": [
+      "cpor_regulatoryregistrationid",
+      "cpor_name",
+      "cpor_territory",
+      "cpor_registrationstatus",
+      "cpor_riskrating",
+      "cpor_ismandatory",
+      "cpor_compliancedeadline",
+      "cpor_lastverifieddate",
+      "cpor_effectivedate",
+      "cpor_nextsignificantdate",
+      "cpor_legislationname",
+      "cpor_legislationurl",
+      "cpor_legaltype",
+      "cpor_compliancedomain",
+      "cpor_industrycode",
+      "cpor_applicabilityrule",
+      "cpor_marketcontext",
+      "cpor_regulatorbodyname",
+      "cpor_regulatortype",
+      "cpor_regulatorwebsiteurl"
+    ]
+  },
+  {
+    "tableName": "cpor_compliancedomain",
+    "columnNames": [
+      "cpor_compliancedomainid",
+      "cpor_name",
+      "cpor_domaincode",
+      "cpor_typicalcoverage",
+      "cpor_commonregulatortypes"
+    ]
+  },
+  {
+    "tableName": "cpor_industrycode",
+    "columnNames": [
+      "cpor_industrycodeid",
+      "cpor_name",
+      "cpor_d365industrycode",
+      "cpor_industrycloudvertical"
+    ]
+  },
+  {
+    "tableName": "cpor_industrydomainmap",
+    "columnNames": [
+      "cpor_industrydomainmapid",
+      "cpor_name",
+      "cpor_industrycode",
+      "cpor_compliancedomain",
+      "cpor_implementationpriority",
+      "cpor_mappingnote",
+      "cpor_asofdate"
+    ]
+  }
+]
+
+
+================================================================================
+SECTION 5: AGENT CONFIGURATION — FUNCTION 3
+Approval Queue Situational Awareness
+================================================================================
+
+1. AGENT BUSINESS FUNCTION
+----------------------------
+Give the Territory Manager a real-time, conversational view of their pending
+approval queue across all managed territories. Surface SLA status,
+re-verification context, and change history for each pending registration
+so the TM can make informed approve/reject decisions without leaving the
+Sales Hub.
+
+2. AGENT INSTRUCTIONS
+----------------------
+You are an approval queue assistant for a Territory Manager in
+Microsoft Dynamics 365 Sales. Your role is to help the TM understand
+and act on their pending registration approvals.
+
+- Scope all approval queries to registrations where:
+    cpor_registrationstatus = Pending TM Review (value: 154080003)
+    AND cpor_territory is in the TM's managed territory list.
+- Calculate Days Pending as: today minus cpor_stage4submitteddate.
+- Flag approvals as OVERDUE if Days Pending exceeds 7 days
+  (the SLA target is 7 business days).
+- For each pending approval, always surface:
+    - Registration name (cpor_name)
+    - Territory name
+    - Legislation name (cpor_legislationname)
+    - Risk rating (cpor_riskrating)
+    - Mandatory flag (cpor_ismandatory)
+    - Submitted date (cpor_stage4submitteddate)
+    - Days Pending (calculated)
+    - Compliance deadline (cpor_compliancedeadline)
+    - Legislation URL (cpor_legislationurl) for TM reference
+- For re-verification context, check if cpor_approveddate is populated.
+  If it is, this is a RE-VERIFICATION (the TM has approved this
+  registration before). State the prior approval date and approver.
+- If cpor_approveddate is null, this is a NEW registration requiring
+  first-time approval.
+- Surface cpor_regulatorynotes if populated — these may contain
+  context from the analyst or prior rejection reasons.
+- When the TM asks to approve or reject, clarify that approval actions
+  must be completed via the Power Automate approval email or the
+  CPOR Industry Catalog app form. The agent is read-only for approvals.
+- Sort all approval queue results by cpor_stage4submitteddate ascending
+  (oldest pending first — highest SLA urgency first).
+
+3. BUSINESS CONTEXT
+--------------------
+When an Industry Analyst completes the regulatory verification stage of the
+Business Process Flow, the registration enters Stage 4 — Territory Approval.
+The TM receives a Power Automate approval email but currently has no aggregate
+view of all pending approvals across their territories. For TMs managing
+multiple territories, approvals can accumulate across separate email threads
+with no SLA visibility.
+
+This agent function replaces that fragmented experience — giving the TM a
+single conversational interface to triage their full approval queue, identify
+overdue items, and distinguish new registrations from re-verifications.
+
+A re-verification occurs when a previously Active registration is recycled
+by the weekly stale digest flow (Flow 1) back through the approval process;
+these require the TM to re-confirm a previously approved obligation.
+
+TM approval SLA target: 7 business days from cpor_stage4submitteddate
+to cpor_approveddate.
+
+Approval fields the TM writes (via the CPOR app form, not via agent):
+  cpor_approvedby       — signs the approval (Lookup to systemuser)
+  cpor_approveddate     — timestamps the approval (Date Only)
+  cpor_regulatorynotes  — caveats or rejection reason (TextArea)
+  cpor_registrationstatus — sets Active (approve) or Pending (reject)
+
+4. DATA INSTRUCTIONS
+---------------------
+- Retrieve territories where managerid equals the current user's systemuserid.
+- Retrieve registrations where cpor_registrationstatus = 154080003
+  (Pending TM Review) AND cpor_territory is in the TM's territory list.
+- For each result, calculate Days Pending = today - cpor_stage4submitteddate.
+- Re-verification detection: if cpor_approveddate is not null AND
+  cpor_approvedby is not null, this record has been previously approved.
+  Report it as RE-VERIFICATION and include prior cpor_approveddate
+  and cpor_approvedby name.
+- New registration detection: cpor_approveddate is null — report as
+  NEW APPROVAL.
+- Flag as OVERDUE SLA if Days Pending > 7.
+- Retrieve cpor_regulatorysource via cpor_regulatorysource lookup to
+  provide authoritative source context to the TM during review.
+- Retrieve cpor_territorysourcemap records for the registration's territory
+  and compliance domain to confirm whether an authoritative source map
+  exists for this jurisdiction-domain combination.
+- Sort results ascending by cpor_stage4submitteddate.
+
+5. STARTER PROMPTS
+-------------------
+  - How many registrations are waiting for my approval right now?
+  - Which pending approvals in my queue have exceeded the 7-day SLA?
+  - Show me all re-verifications pending my approval — what changed since
+    I last approved them?
+  - Give me a summary of the Contoso Healthcare registration pending my
+    review in the Western Europe territory.
+  - Which territory has the most overdue approvals in my queue?
+
+6. DATA SOURCE
+---------------
+Dataverse — CPOR Industry Catalog (same Dataverse environment as D365 Sales)
+
+7. TABLES AND COLUMNS CONFIGURATION
+-------------------------------------
+[
+  {
+    "tableName": "territory",
+    "columnNames": [
+      "territoryid",
+      "name",
+      "managerid",
+      "cpor_territorycode",
+      "cpor_isocountrycode",
+      "cpor_jurisdictionlevel"
+    ]
+  },
+  {
+    "tableName": "cpor_regulatoryregistration",
+    "columnNames": [
+      "cpor_regulatoryregistrationid",
+      "cpor_name",
+      "cpor_territory",
+      "cpor_registrationstatus",
+      "cpor_riskrating",
+      "cpor_ismandatory",
+      "cpor_stage4submitteddate",
+      "cpor_compliancedeadline",
+      "cpor_lastverifieddate",
+      "cpor_effectivedate",
+      "cpor_approvedby",
+      "cpor_approveddate",
+      "cpor_legislationname",
+      "cpor_legislationurl",
+      "cpor_legaltype",
+      "cpor_compliancedomain",
+      "cpor_industrycode",
+      "cpor_applicabilityrule",
+      "cpor_regulatorynotes",
+      "cpor_regulatorbodyname",
+      "cpor_regulatortype",
+      "cpor_regulatorwebsiteurl",
+      "cpor_regulatorysource",
+      "cpor_requestedby",
+      "cpor_intakesource"
+    ]
+  },
+  {
+    "tableName": "cpor_compliancedomain",
+    "columnNames": [
+      "cpor_compliancedomainid",
+      "cpor_name",
+      "cpor_domaincode",
+      "cpor_typicalcoverage"
+    ]
+  },
+  {
+    "tableName": "cpor_territorysourcemap",
+    "columnNames": [
+      "cpor_territorysourcemapid",
+      "cpor_name",
+      "cpor_territory",
+      "cpor_compliancedomain",
+      "cpor_regulatorysource",
+      "cpor_sourceurls",
+      "cpor_usagenote",
+      "cpor_asofdate"
+    ]
+  },
+  {
+    "tableName": "cpor_regulatorysource",
+    "columnNames": [
+      "cpor_regulatorysourceid",
+      "cpor_name"
+    ]
+  }
+]
+
+
+================================================================================
+SECTION 6: CROSS-FUNCTION IMPLEMENTATION NOTES
+================================================================================
+
+CONFIRMED SCHEMA FIELD NAMES (from deployed schema files)
+----------------------------------------------------------
+All column logical names used in the three configurations above were
+verified against the deployed schema files in schema/tables/*.schema.json.
+Key confirmations:
+
+  Deployed Logical Name       Notes
+  --------------------------  -----------------------------------------------
+  cpor_approvedby             CONFIRMED deployed. Do NOT use cpor_verifiedby.
+  cpor_approveddate           CONFIRMED deployed. Do NOT use cpor_approvaldate.
+  cpor_stage4submitteddate    CONFIRMED deployed (schema line 4989).
+  cpor_additionalsources      CONFIRMED deployed. Do NOT use cpor_additionalsourceurls.
+  cpor_registrationstatus     Confirmed referenced in all JS webresource files.
+  cpor_riskrating             Confirmed referenced in catalog_health.js.
+  cpor_lastverifieddate       Confirmed referenced in all JS webresource files.
+  cpor_ismandatory            Confirmed referenced in registration_dialog.js.
+  cpor_compliancedeadline     Confirmed deployed (schema line 1112).
+  cpor_effectivedate          Confirmed deployed (schema line 1473).
+  cpor_nextsignificantdate    Confirmed deployed (schema line 3138).
+  cpor_legislationname        Confirmed deployed (schema line 2614).
+  cpor_legislationurl         Confirmed deployed (schema line 2745).
+  cpor_legaltype              Confirmed deployed (schema line 2398).
+  cpor_regulatorbodyname      Confirmed deployed (schema line 3488).
+  cpor_regulatortype          Confirmed deployed (schema line 3619).
+  cpor_regulatorwebsiteurl    Confirmed deployed (schema line 3835).
+  cpor_regulatorynotes        Confirmed deployed (schema line 3966).
+  cpor_requestedby            Confirmed deployed (schema line 4443).
+  cpor_intakesource           Confirmed deployed (schema line 1834).
+  cpor_marketcontext          Confirmed deployed (schema line 2876).
+  cpor_applicabilityrule      Confirmed deployed (schema line 517).
+
+Territory custom extension fields (deployed on OOB territory table):
+  cpor_territorycode          Confirmed deployed (territory schema line 844).
+  cpor_jurisdictionlevel      Confirmed deployed (territory schema line 497).
+  cpor_isocountrycode         Confirmed deployed (territory schema line 366).
+  cpor_territorytype          Confirmed deployed (territory schema line 975).
+  cpor_sourceurl              Confirmed deployed (territory schema line 713).
+
+OOB Account fields used in Function 2:
+  accountid                   Confirmed deployed (account schema line 821).
+  name                        Confirmed deployed (account schema line 19364).
+  territoryid                 Confirmed deployed (account schema line 27721).
+  ownerid                     Confirmed deployed (account schema line 21110).
+  industrycode                Confirmed deployed (account schema line 15204).
+  revenue                     Confirmed deployed (account schema line 25129).
+  numberofemployees           Confirmed deployed (account schema line 19495).
+  description                 Confirmed deployed (account schema line 12018).
+  address1_country            Confirmed deployed (account schema line 1881).
+  address1_stateorprovince    Confirmed deployed (account schema line 3875).
+
+TERRITORY SCOPING PATTERN
+--------------------------
+All three agent functions scope to the TM's territories using:
+
+  Step A: Query territory where managerid = currentUserId
+          -> returns array of territory GUIDs
+
+  Step B: Filter registrations using OR chain on cpor_territory lookup:
+          _cpor_territory_value eq 'id1'
+          or _cpor_territory_value eq 'id2'
+          or _cpor_territory_value eq 'id3'
+
+  IMPORTANT: Dataverse Web API does NOT support $in on lookup fields.
+  Explicit OR chains are required. For TMs with >20 territories, split
+  into multiple queries to avoid OData filter length limits.
+
+AGENT SECURITY REQUIREMENTS
+-----------------------------
+The Sales Research Agent must be configured with a service identity that
+has at minimum the following Dataverse security role:
+
+  Role: CPOR Territory Manager (defined in Guide 08)
+  Privileges required for agent read access:
+    cpor_RegulatoryRegistration  — Global Read
+    cpor_IndustryCode            — Global Read
+    cpor_ComplianceDomain        — Global Read
+    cpor_IndustryDomainMap       — Global Read
+    cpor_TerritorySourceMap      — Global Read
+    cpor_RegulatorySource        — Global Read
+    territory                    — Global Read
+    account                      — Global Read
+    lead                         — Global Read
+
+  The agent is READ-ONLY. It does NOT require the CPOR TM Write Fields
+  security profile — that profile governs the TM's human form interactions.
+
+REGISTRATION STATUS VALUES (Choice field: cpor_registrationstatus)
+-------------------------------------------------------------------
+  Active              154080000   — published, verified obligation
+  Draft               154080001   — in-progress, not yet verified
+  Pending             154080002   — recycled by stale flow, awaiting re-verify
+  Pending TM Review   154080003   — awaiting TM approval (Stage 4)
+  Inactive            154080004   — deactivated, not surfaced to agents
+
+  Function 1 query filter: cpor_registrationstatus eq 154080000 (Active)
+  Function 3 query filter: cpor_registrationstatus eq 154080003 (Pending TM Review)
+
+RISK RATING VALUES (Choice field: cpor_riskrating)
+---------------------------------------------------
+  High    154080000
+  Medium  154080001
+  Low     154080002
+
+RELATIONSHIP TO FLOW 5 AND GUIDE 09
+-------------------------------------
+The three agent functions are the conversational, on-demand complement to:
+  - Flow 5 (Guide 10): weekly automated push of compliance Tasks to AE
+  - TM Health Webresource (Guide 09): structured dashboard view in the app
+
+These are not replacements for Flow 5 or Guide 09. They serve different
+interaction modes:
+  - Flow 5 / Guide 09: structured, scheduled, app-based
+  - Sales Research Agent: conversational, on-demand, natural language
+
+INTEGRATION WITH GUIDE 11 (cpor_xrm_client.js)
+-------------------------------------------------
+The utility functions defined in Guide 11 for the TM Health webresource
+use the same scoping logic the agent's Dataverse connector applies:
+  getCurrentUserId()         -> agent uses session identity
+  getManagedTerritoryIds()   -> agent queries territory.managerid = userId
+  buildTerritoryFilter()     -> agent builds OR chain on cpor_territory
+
+The agent platform handles identity resolution natively. The JavaScript
+utilities in Guide 11 are for the webresource context only and are not
+needed by the agent.
+
+
+================================================================================
+SECTION 7: FUNCTION COMPARISON SUMMARY
+================================================================================
+
+  Configuration Item     Function 1              Function 2              Function 3
+  ---------------------  ----------------------  ----------------------  -----------------------
+  Primary Persona        Territory Manager       Territory Manager       Territory Manager
+  Secondary Consumer     TM (self)               Account Executive       TM (approval workflow)
+  Core Data Entity       cpor_regulatoryregistration (all three)
+  Scope Anchor           territory.managerid     territory.managerid     territory.managerid
+  Status Filter          Active (154080000)       Active (154080000)      Pending TM (154080003)
+  Key Signal             Risk + deadline         Account exposure        Days Pending + SLA
+  Sort Order             Deadline ASC            Urgency DESC            Stage4SubmittedDate ASC
+  Writes to Dataverse    No                      No                      No
+  Unique Tables          cpor_industrycode       account                 cpor_territorysourcemap
+                         cpor_compliancedomain   cpor_industrydomainmap  cpor_regulatorysource
+  Starter Prompt Count   5                       5                       5
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================

@@ -1,0 +1,1137 @@
+================================================================================
+CPOR DURABLE — TERRITORY MANAGER ROLE
+Gap Analysis, Open Question Resolutions, and Implementation Remediation Plan
+Date: 2026-06-21
+================================================================================
+
+PURPOSE
+-------
+This document captures the full design review of the Territory Manager (TM)
+role experience in the CPOR Industry Catalog, including:
+
+  - Role experience summary for Industry Analyst, Industry Team Lead,
+    and Territory Manager
+  - Deep dive on TM monitoring of Industry Catalog Health
+  - Open question resolutions with recommendations
+  - Schema gap analysis correlated to deployed Dataverse table schemas
+    and deployed webresource JavaScript files
+  - Remediation plan: 5 new or updated implementation guides (Guides 08-12)
+
+This document is intended as input to the next phase of implementation work.
+
+
+================================================================================
+SECTION 1: ROLE EXPERIENCE SUMMARY
+================================================================================
+
+ROLE STRUCTURE
+--------------
+The current design defines ONE shared security role — "CPOR Global Industry Team"
+— that covers all analyst-side personas. Three functional sub-roles are
+distinguished by their primary work area in the app, not by separate security
+permissions:
+
+  Sub-Role              Design Term           Primary Work Area
+  --------------------  --------------------  ----------------------------------
+  Industry Analyst      Compliance Analyst    Registrations (RegulatoryRegistration)
+  Industry Team Lead    Industry Specialist   Crosswalk (IndustryDomainMap)
+  Data Steward          Data Steward          Taxonomy + Catalog Health Dashboard
+  Territory Manager     Separate persona      Approval email (outside the app)
+
+INDUSTRY ANALYST (COMPLIANCE ANALYST)
+--------------------------------------
+Daily work surface in the CPOR Industry Catalog app:
+  - Active Registrations view (default) — sorted oldest-verified-first
+  - Stale — Needs Reverification view — inline-editable cpor_lastverifieddate
+  - Approaching Compliance Deadlines view — 90-day lookahead queue
+
+New registration lifecycle via Business Process Flow (5 stages):
+  Stage 1 — Draft              (Analyst: name, legislation name, legal type)
+  Stage 2 — Taxonomy Validation (Analyst: industry code, territory, domain FKs)
+                                 Context sub-grids show IndustryDomainMap and
+                                 TerritorySourceMap for consistency validation.
+                                 Warning shown if territory has no managerid.
+  Stage 3 — Legislation Verification (Analyst: URL, risk, mandatory, lastverifieddate)
+                                       RE-ENTRY POINT when Flow 1 recycles stale records.
+  Stage 4 — Territory Approval (Territory Manager sign-off)
+  Stage 5 — Activated          (System — Flow 4 advances automatically)
+
+Automated support — Flow 1 (Stale Registration Weekly Digest):
+  Every Monday: notifies Industry Team, sets stale Active records to Pending,
+  moves their BPF back to Stage 3. Analyst does not need to hunt for aging records.
+
+INDUSTRY TEAM LEAD (INDUSTRY SPECIALIST)
+-----------------------------------------
+Primary area: Crosswalk section of the site map.
+  - Industry Domain Maps — maintains cpor_IndustryDomainMap records
+    (industry code x compliance domain pairings)
+  - Territory Source Maps — maintains cpor_TerritorySourceMap records
+    (authoritative regulatory sources per territory)
+
+Secondary: Catalog Health Dashboard (org-wide) — primary consumer for
+coverage gaps and catalog-wide health signals.
+
+Flows 2 and 3 (Lead auto-sync and Account industry code copy) operate
+transparently under this persona's stewardship, maintaining catalog FK
+integrity as sellers qualify pipeline.
+
+Has Global Read on Lead, Account, Opportunity, Hypothesis for business context.
+Does NOT have Write on engagement records.
+
+TERRITORY MANAGER — CURRENT DESIGN
+-------------------------------------
+TM exists in the current design in exactly ONE functional capacity:
+as an email-based approver (Flow 4). Their entire designed touchpoint:
+
+  1. Analyst completes BPF Stage 3, sets cpor_registrationstatus = 154080003
+     (Pending TM Review)
+  2. Flow 4 detects status change, routes Power Automate Approval to
+     territory.managerid of the registration's linked territory
+  3. TM receives approval email, clicks Approve or Reject
+  4. Optionally adds comments to cpor_regulatorynotes on rejection
+
+The TM has no app role, no TM-scoped views, no dashboard, and no defined
+channel back to Account Executives. Guide 07 flags a restricted read role as
+optional and deferred. The design is approval-gated but NOT monitoring-capable.
+
+
+================================================================================
+SECTION 2: TM MONITORING — REQUIREMENTS AND GAPS
+================================================================================
+
+THE CORE REQUIREMENT
+--------------------
+The Territory Manager must:
+  1. Monitor compliance risk and time-driven compliance obligations for their
+     territories in the Industry Catalog
+  2. Provide metrics and evaluations to Account Executives in the Sales CRM
+     so AEs can act on compliance obligations relevant to their accounts
+
+This requires three capabilities the current design does not have:
+
+  1. VISIBILITY   — Territory-scoped catalog view (app role + scoped views)
+  2. MEASUREMENT  — Risk + time metrics per territory (TM Health Dashboard)
+  3. OUTBOUND SIGNAL — Metrics flowing to AE in Sales CRM (new Flow 5)
+
+WHAT THE CURRENT DESIGN GIVES THE TM
+--------------------------------------
+  - cpor_stage4submitteddate field (Flow 4 Step 1b) stamps when analyst
+    submitted for TM review — enables SLA tracking (7-day target)
+  - A 7-day timeout and escalation in Flow 4 (Branch B escalation email)
+  - cpor_approvedby and cpor_approveddate fields for approval record
+  - Approval email payload includes: legislation, territory, risk, mandatory,
+    applicability rule, legislation URL, and a direct record link
+
+WHAT IS MISSING
+---------------
+  a) No TM security role — no app access defined
+  b) No TM-scoped views (filtered to territory.managerid = current user)
+  c) No TM Health Dashboard (territory-scoped parallel to global Catalog Health)
+  d) No "Pending My Approval" queue — TM has no aggregate view of open approvals
+  e) No outbound signal to AE — Flow 5 does not exist
+  f) No re-verification context in approval email (is this new or re-verification?
+     What changed since last approval?)
+  g) cpor_xrm_client.js cannot identify the current user's systemuserid —
+     getContext() returns only { userName, orgName, orgUrl }
+  h) Zero role-based filtering in any webresource JS file
+
+THE RISK + TIME SIGNAL MATRIX
+-------------------------------
+The most actionable intelligence a TM delivers to an AE combines
+risk rating x time urgency. Four quadrant signals:
+
+                         LOW URGENCY             HIGH URGENCY
+                      (>90 days / stable)     (<90 days / stale)
+                   +----------------------+----------------------+
+  HIGH RISK        |  MONITOR             |  ESCALATE TO AE NOW  |
+  (Mandatory)      |  Quarterly review    |  Flow 5 notification |
+                   +----------------------+----------------------+
+  LOW RISK         |  ROUTINE             |  REVIEW              |
+  (Optional)       |  Annual review       |  Weekly TM digest    |
+                   +----------------------+----------------------+
+
+Current design handles ONLY the Stale -> Analyst path (Flow 1).
+The ESCALATE TO AE NOW quadrant is entirely unaddressed.
+
+TM APPROVAL QUEUE PROBLEM
+--------------------------
+The TM currently has no way to see all pending approvals in one place.
+If a TM manages 12 territories and has 8 pending registrations, they have
+8 separate email threads with no aggregate view and no SLA visibility.
+
+Missing: A "Pending My Approval" view on cpor_RegulatoryRegistration:
+  Filter:  cpor_registrationstatus eq 154080003 (Pending TM Review)
+           AND territory.managerid eq [current user]
+  Columns: Name, Territory, Risk Rating, Mandatory, cpor_stage4submitteddate,
+           Days Pending (calculated: today minus cpor_stage4submitteddate)
+  Sort:    cpor_stage4submitteddate ASC (oldest pending first)
+
+RE-VERIFICATION HIDDEN WORKLOAD
+---------------------------------
+When Flow 1 recycles a stale Active registration back to Stage 3, it will
+eventually return to Stage 4 — requiring TM re-approval. The approval email
+currently looks identical for both new registrations and re-verifications.
+
+Gap in Flow 4 approval payload: no prior approval history, no change delta
+(e.g., "Risk Rating changed from Medium to High since last approval",
+"cpor_lastverifieddate previously: 2025-12-01").
+
+
+================================================================================
+SECTION 3: OPEN QUESTION RESOLUTIONS
+================================================================================
+
+Q1: TM IDENTITY AND SCOPE
+--------------------------
+Question: Is the TM always territory.managerid? Multi-territory coverage?
+
+Resolution:
+  territory.managerid is the correct anchor. A TM managing multiple territories
+  appears as managerid on each one. The scoping query pattern:
+
+    Step A: GET /territories
+              ?$filter=_managerid_value eq [currentUserId]
+              &$select=territoryid,name
+            → returns array of territory GUIDs the TM manages
+
+    Step B: Filter registrations using OR chain on _cpor_territory_value:
+            _cpor_territory_value eq 'id1'
+            or _cpor_territory_value eq 'id2'
+            or _cpor_territory_value eq 'id3'
+
+  NOTE: Dataverse Web API does NOT support $in operator on lookup fields.
+  An explicit OR chain is required. This pattern is already used elsewhere
+  in the codebase.
+
+  BLOCKER: cpor_xrm_client.js getContext() returns { userName, orgName, orgUrl }
+  only. It does NOT return systemuserid. A new getCurrentUserId() function is
+  required:
+    Xrm.Utility.getGlobalContext().getUserId() — strip curly braces from result.
+
+Q2: AE TO TM RELATIONSHIP
+--------------------------
+Question: How does the TM know which AEs work accounts in their territory?
+
+Resolution:
+  The join already exists in OOB D365:
+    account.territoryid → territory.territoryid → territory.managerid = TM
+    account.ownerid = AE
+
+  Flow 5 walks this chain:
+    TM's territories → accounts assigned to those territories
+    → account.ownerid (AE systemuser) → create Task on Account owned by AE
+
+  No new fields needed. This is entirely OOB relationship traversal.
+
+Q3: METRICS CADENCE
+--------------------
+Question: Fixed cadence (QBR, weekly) or threshold-triggered?
+
+Resolution: Two modes:
+  a) WEEKLY AUTOMATED — same Monday recurrence as Flow 1, offset +2 hours
+     so stale processing completes first. Creates Task records on Accounts
+     in D365 Sales. AE sees Tasks in their Activity timeline and My Activities.
+
+  b) ON-DEMAND — TM presses "Generate AE Report" command bar button in
+     the TM Health webresource. Triggers an instant flow via HTTP POST.
+     TM can fire this outside the weekly cadence when a critical regulation
+     is activated or when a deadline crosses an urgency threshold.
+
+Q4: TM WRITE SCOPE ON REGISTRATION
+------------------------------------
+Question: Which fields should the TM be able to write independently?
+
+Resolution: TM writes EXACTLY four fields via Field Security Profile:
+  cpor_approvedby       — signs the approval (Lookup to systemuser)
+  cpor_approveddate     — timestamps the approval (Date Only)
+  cpor_regulatorynotes  — jurisdiction caveats or rejection reason (TextArea)
+  cpor_registrationstatus — sets Active (approve) or Pending (reject) (Choice)
+
+TM must NOT write:
+  cpor_riskrating, cpor_ismandatory, cpor_compliancedomain,
+  cpor_industrycode, cpor_territory, cpor_legislationurl,
+  cpor_legislationname, any taxonomy anchor field
+
+Rationale: Risk rating and taxonomy classification are analyst responsibilities.
+The TM's role is jurisdictional sign-off, not regulatory classification.
+
+Implementation: Standard Dataverse security roles do not restrict write to
+specific columns. A Field Security Profile named "CPOR TM Write Fields"
+is required, granting Write on only the four fields above. Assign the
+profile to the CPOR Territory Manager security role.
+
+Q5: cpor_approvaldate DEPLOYMENT STATUS — CRITICAL NAMING CONFLICT
+--------------------------------------------------------------------
+Question: Is cpor_approvaldate deployed? Guide 07 says it is not yet deployed.
+
+Resolution: CRITICAL DISCREPANCY FOUND.
+
+The deployed schema file (cpor_regulatoryregistration.schema.json) shows
+TWO fields already deployed that Guide 07 misidentifies:
+
+  Deployed (Schema)    Guide 07 Says                    Status per Guide
+  -------------------  -------------------------------  -------------------
+  cpor_approvedby      cpor_verifiedby                  "IS deployed"
+  cpor_approveddate    cpor_approvaldate                "NOT YET deployed"
+
+Guide 07's field reference correction table even lists cpor_approvedby as
+an "earlier incorrect name" for cpor_verifiedby — but the schema file proves
+cpor_approvedby IS the actual deployed logical name.
+
+CONSEQUENCE: Every Flow 4 step, BPF Stage 4 step, and form field that
+references cpor_verifiedby or cpor_approvaldate is using the WRONG logical
+name and WILL FAIL at runtime with a field-not-found error.
+
+RESOLUTION: Trust the schema file.
+  Deployed logical names are: cpor_approvedby and cpor_approveddate.
+  All implementation guide references to cpor_verifiedby must be corrected
+  to cpor_approvedby. All references to cpor_approvaldate must be corrected
+  to cpor_approveddate. The field the guides say needs to be created
+  ALREADY EXISTS under a different name.
+
+VERIFICATION COMMAND (run before implementing):
+  GET /EntityDefinitions(LogicalName='cpor_regulatoryregistration')
+      /Attributes?$filter=startswith(LogicalName,'cpor')
+      &$select=LogicalName,DisplayName
+  Confirm cpor_approvedby and cpor_approveddate appear in the result.
+
+Q6: LONGITUDINAL HEALTH TRACKING
+----------------------------------
+Question: How does the TM provide trend data (e.g., coverage improved 15%
+this quarter) to AEs for QBR purposes?
+
+Resolution: Defer cpor_CatalogHealthSnapshot entity to Phase 2.
+
+For the initial TM experience, the weekly Flow 1 run history plus
+cpor_approveddate timestamps provide sufficient point-in-time signal.
+
+Phase 2 plan: Add cpor_CatalogHealthSnapshot entity (one row per territory
+per weekly run). Fields: territory, active_count, stale_count, high_risk_count,
+pending_tm_count, snapshot_date. Power BI embedded tile or MDA chart reads
+this for trend lines over rolling 12 weeks.
+
+
+================================================================================
+SECTION 4: SCHEMA GAP ANALYSIS
+================================================================================
+
+SOURCE OF TRUTH USED
+---------------------
+  Schema files:   schema/tables/*.schema.json (9 files)
+  Webresources:   webresources/js/*.js (7 files) + webresources/html/*.html (4 files)
+  Guides:         context/2 - Design/Industry CRM Implementation/* (8 guides)
+
+The JavaScript files provide an independent ground-truth for what fields
+are actually being queried at runtime, independent of what the guides say.
+
+4.1 NAMING CONFLICTS — HIGH PRIORITY (breaks flows and BPF at runtime)
+-----------------------------------------------------------------------
+
+  CONFLICT 1: Approval authority field
+    Deployed in schema:  cpor_approvedby   (Lookup -> systemuser)
+    Guide 06 Flow 4:     cpor_verifiedby@odata.bind (WRONG)
+    Guide 07 BPF:        cpor_verifiedby in Stage 4 steps (WRONG)
+    Guide 07 Field Table: lists cpor_approvedby as "earlier incorrect name" (BACKWARDS)
+    Impact: Flow 4 Step 6a update action will fail. BPF Stage 4 step field
+            picker will not find cpor_verifiedby.
+    Fix: Correct to cpor_approvedby in both guides.
+
+  CONFLICT 2: Approval date field
+    Deployed in schema:  cpor_approveddate  (DateTime, Date Only)
+    Guide 07 BPF:        cpor_approvaldate — labeled "NOT YET DEPLOYED — must create"
+    Guide 06 Flow 4:     cpor_approvaldate in Step 6a
+    Impact: Guide instructs implementer to create a field that already exists
+            under a different name, potentially creating a duplicate field.
+    Fix: Correct to cpor_approveddate. Remove "NOT YET DEPLOYED" instructions.
+
+  CONFLICT 3: Additional sources field
+    Deployed in schema:  cpor_additionalsources  (Memo, max 4000 chars)
+    Guide 03 Form 1:     cpor_additionalsourceurls (Section 3)
+    Impact: Form field binding will fail to locate the field.
+    Fix: Correct Guide 03 Form 1 Section 3 to use cpor_additionalsources.
+
+4.2 FIELDS IN GUIDES AND JS BUT ABSENT FROM SCHEMA EXTRACT
+------------------------------------------------------------
+These fields are actively queried in the JavaScript webresources and/or
+referenced in the implementation guides. The schema extract is not exhaustive
+(it covers the most critical fields). These must be verified as deployed:
+
+  Field                    Used In                           Verify
+  -----------------------  --------------------------------  --------
+  cpor_registrationstatus  All JS files + CRM Guide 07       CONFIRM
+  cpor_riskrating          catalog_health.js, components.js  CONFIRM
+  cpor_lastverifieddate    All JS files + Guide 02 views     CONFIRM
+  cpor_ismandatory         registration_dialog.js            CONFIRM
+  cpor_legislationname     registration_manager.js           CONFIRM
+  cpor_legislationurl      registration_dialog.js + BPF      CONFIRM
+  cpor_legaltype           registration_dialog.js + BPF      CONFIRM
+  cpor_regulatorbodyname   registration_dialog.js            CONFIRM
+  cpor_regulatortype       registration_dialog.js            CONFIRM
+  cpor_regulatorwebsiteurl registration_dialog.js            CONFIRM
+  cpor_regulatorynotes     Flow 4 (rejection notes)          CONFIRM
+  cpor_requestedby         Guide 03 Form 1 Section 1         CONFIRM
+  cpor_intakesource        registration_dialog.js            CONFIRM
+  cpor_marketcontext       registration_dialog.js            CONFIRM
+  cpor_nextsignificantdate Guide 02 View 2 (Stale view)      CONFIRM
+  cpor_solutionarea        registration_dialog.js Step 4     CONFIRM
+  cpor_buyerpersona        registration_dialog.js Step 4     CONFIRM
+  cpor_salesnarrative      registration_dialog.js Step 4     CONFIRM
+
+VERIFICATION COMMAND:
+  GET /EntityDefinitions(LogicalName='cpor_regulatoryregistration')
+      /Attributes?$filter=startswith(LogicalName,'cpor')
+      &$select=LogicalName,DisplayName,AttributeType,RequiredLevel
+  Run this once to get the complete list of deployed cpor_ fields.
+
+4.3 FIELD REQUIRED IN FLOWS BUT NOT IN SCHEMA — MUST BE CREATED
+----------------------------------------------------------------
+  Field:    cpor_stage4submitteddate
+  Type:     Date Only
+  Purpose:  Stamped by Flow 4 Step 1b when analyst submits for TM review.
+            Together with cpor_approveddate, enables SLA tracking
+            (target: TM approval within 7 business days).
+  Used by:  Flow 4 Step 1b (write); TM Health webresource (read — Days Pending
+            calculation in "Pending My Approval" tab)
+  Status:   NOT in schema. Must be created in GII data model before
+            deploying Flow 4.
+  Action:   Add to GII Guide 04 field table. Create in CPOR solution before
+            deploying CRM Guide 06 (Flows).
+
+4.4 TERRITORY ENTITY — OOB FIELDS
+-----------------------------------
+The territory schema file only contains CPOR custom extension fields. The
+following OOB fields are relied on by guides and flows but are not in the
+CPOR schema file (they are standard D365 fields):
+
+  OOB Field    Used By                              Expected Logical Name
+  -----------  -----------------------------------  ---------------------
+  managerid    Flow 4 (TM routing), BPF Stage 2     managerid
+  name         All views, crosswalk.js, taxonomy.js name
+  description  cpor_taxonomy.js (Territories tab)   description
+
+VERIFICATION:
+  GET /EntityDefinitions(LogicalName='territory')/Attributes
+      ?$select=LogicalName,DisplayName
+  Confirm managerid appears as an OOB Lookup -> systemuser field.
+
+4.5 WEBRESOURCE ROLE-BASED FILTERING — UNIVERSAL GAP
+------------------------------------------------------
+Analysis of all 7 JavaScript files confirms:
+
+  File                         Role Logic   Territory Scoping
+  ---------------------------  -----------  -----------------
+  cpor_catalog_health.js       None         None
+  cpor_components.js           None         None (UI library)
+  cpor_crosswalk.js            None         Optional user filter only
+  cpor_new_registration_dialog None         User-selected in form
+  cpor_registration_manager.js None         User-selected filter bar
+  cpor_taxonomy.js             None         CPOR code filter only
+  cpor_xrm_client.js           None         No systemuserid exposed
+
+ALL logged-in users see ALL data across all webresources. There is no
+auto-scoping of any kind. The Territory filter in cpor_registration_manager.js
+is a manually-selected user preference, NOT an automatic scope to the
+current user's managed territories.
+
+This is expected for the Global Industry Team role (they need global visibility).
+It is a blocking gap for the Territory Manager role — a TM's Health Dashboard
+must auto-scope to their territories on load.
+
+
+================================================================================
+SECTION 5: REMEDIATION PLAN — NEW AND UPDATED IMPLEMENTATION GUIDES
+================================================================================
+
+GUIDE SEQUENCING
+----------------
+  Guide 12 must be completed FIRST — it unblocks all other guides
+  by resolving naming conflicts that would cause runtime failures.
+  Guides 08 and 11 can be built in parallel after Guide 12.
+  Guide 09 depends on both 08 (role) and 11 (utilities).
+  Guide 10 can be built after Guide 12 (uses field names directly).
+
+  Guide 12 (Schema Reconciliation)  ──┬──> Guide 08 (TM Role) ──────┐
+                                      │                              │
+                                      └──> Guide 11 (XRM Client) ───┤
+                                                                     v
+                                                           Guide 09 (TM Health Page)
+                                                                     |
+                                                                     v
+                                                           Guide 10 (Flow 5 -> AE)
+
+--------------------------------------------------------------------------------
+GUIDE 12 (NEW): Schema Reconciliation and Corrections
+Date to author: As soon as possible — BLOCKING
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  A single authoritative correction guide. Documents every confirmed naming
+  conflict between the deployed schema and the implementation guides, and
+  specifies the exact text changes required in each guide.
+
+VERIFICATION FIRST:
+  Before authoring corrections, run:
+    GET /EntityDefinitions(LogicalName='cpor_regulatoryregistration')
+        /Attributes?$filter=startswith(LogicalName,'cpor')
+        &$select=LogicalName,DisplayName
+  Record the complete deployed field list. Use it to validate all corrections.
+
+CORRECTIONS IN CRM GUIDE 06 (Power Automate Flows):
+  Flow 4 Step 6a (Approved branch — Update a row action):
+    Replace: cpor_verifiedby@odata.bind
+    With:    cpor_approvedby@odata.bind
+    Replace: cpor_approvaldate: @{utcNow('yyyy-MM-dd')}
+    With:    cpor_approveddate: @{utcNow('yyyy-MM-dd')}
+
+  Flow 4 Step 6a (Approved branch — confirmation notification):
+    Replace all references to cpor_verifiedby with cpor_approvedby
+    in body text and dynamic content references.
+
+  Flow 4 Step 6b (Rejected branch) — if cpor_verifiedby appears: correct.
+
+CORRECTIONS IN CRM GUIDE 07 (Business Process Flow):
+  Field reference table header:
+    Remove: cpor_verifiedby | Verified By | cpor_approvedby (earlier incorrect)
+    Replace with: cpor_approvedby | Approved By | (no correction needed)
+
+  Stage 4 Step 1 definition:
+    Replace: Step 1: cpor_verifiedby (Verified By — Lookup to systemuser)
+    With:    Step 1: cpor_approvedby (Approved By — Lookup to systemuser)
+
+  Stage 4 Step 2 definition:
+    Replace: Step 2: cpor_approvaldate (Approval Date)
+    With:    Step 2: cpor_approveddate (Approval Date — already deployed)
+    Remove: "SCHEMA NOTE: cpor_approvaldate must be created in the CPOR solution
+            before creating Stage 4" — the field exists.
+
+  Stage 5 display steps:
+    Replace: Step 2: cpor_verifiedby (shows approving TM)
+    With:    Step 2: cpor_approvedby (shows approving TM)
+    Replace: Step 3: cpor_approvaldate (shows approval date)
+    With:    Step 3: cpor_approveddate (shows approval date)
+
+  PREREQUISITE section:
+    Replace: "cpor_approvaldate (Date Only) is NOT YET deployed. Must be created"
+    With:    "cpor_approveddate (Date Only) IS DEPLOYED. No action required."
+
+  VERIFICATION section (Step 6 FLOW 4 APPROVAL):
+    Replace: cpor_verifiedby = TM
+    With:    cpor_approvedby = TM
+    Replace: cpor_approvaldate = today
+    With:    cpor_approveddate = today
+
+CORRECTIONS IN CRM GUIDE 03 (Forms):
+  Form 1, Section 3 (Legislation Details), field listing:
+    Replace: Additional Sources (cpor_additionalsourceurls)
+    With:    Additional Sources (cpor_additionalsources)
+
+NEW FIELD TO CREATE — cpor_stage4submitteddate:
+  Add to GII Guide 04 (cpor_RegulatoryRegistration fields):
+    Field Name:    cpor_stage4submitteddate
+    Display Name:  Stage 4 Submitted Date
+    Type:          DateTime (Date Only, UserLocal behavior)
+    Required:      None
+    Description:   Stamped by Flow 4 on entry to BPF Stage 4 (Pending TM Review).
+                   Records when the analyst submitted for TM approval.
+                   Used with cpor_approveddate to calculate TM review SLA
+                   (target: 7 business days).
+  Note: This field MUST be created before deploying CRM Guide 06 Flow 4.
+
+--------------------------------------------------------------------------------
+GUIDE 08 (NEW): CPOR Territory Manager Security Role
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  Define the CPOR Territory Manager security role, its privilege matrix,
+  the required Field Security Profile, and how the TM gains access to
+  the CPOR Industry Catalog app with a scoped site map area.
+
+ROLE NAME: CPOR Territory Manager
+DESCRIPTION: Grants Territory Managers read access to all catalog entities
+  and write access to approval fields on cpor_RegulatoryRegistration only.
+  Row-level scoping to the TM's territories is enforced at the view and
+  webresource layer (see Guide 09), not at the Dataverse privilege layer.
+
+PRIVILEGES ON CATALOG ENTITIES:
+
+  Entity                       Create  Read    Write   Delete  Append  AppendTo
+  ---------------------------  ------  ------  ------  ------  ------  --------
+  cpor_RegulatoryRegistration  None    Global  Global* None    Global  Global
+  cpor_IndustryCode            None    Global  None    None    None    None
+  cpor_ComplianceDomain        None    Global  None    None    None    None
+  territory                    None    Global  None    None    None    None
+  cpor_RegulatorySource        None    Global  None    None    None    None
+  cpor_IndustryDomainMap       None    Global  None    None    None    None
+  cpor_TerritorySourceMap      None    Global  None    None    None    None
+
+  * Write on cpor_RegulatoryRegistration is intentionally Global scope
+    at the role level, but restricted to 4 specific fields via the
+    Field Security Profile defined below.
+
+PRIVILEGES ON ENGAGEMENT ENTITIES:
+
+  Entity            Create  Read    Write  Delete
+  ----------------  ------  ------  -----  ------
+  lead              None    Global  None   None
+  opportunity       None    Global  None   None
+  account           None    Global  None   None
+
+FIELD SECURITY PROFILE: CPOR TM Write Fields
+  Purpose: Restricts the TM's Write privilege on cpor_RegulatoryRegistration
+           to exactly 4 fields. All other fields on the entity remain read-only
+           for the TM despite the Global Write on the role.
+  Fields:
+    cpor_approvedby         Allow Update: Yes
+    cpor_approveddate       Allow Update: Yes
+    cpor_regulatorynotes    Allow Update: Yes
+    cpor_registrationstatus Allow Update: Yes
+
+  PORTAL STEPS:
+    In make.powerapps.com, navigate to Settings > Advanced Settings >
+    Security > Field Security Profiles.
+    Select New. Name: CPOR TM Write Fields.
+    Add the 4 fields above. Set Allow Update = Yes for each.
+    Assign the profile to: CPOR Territory Manager (security role).
+
+SOFT-SCOPE APPROACH (Phase 1 Decision):
+  This design uses UI-level territory filtering rather than Dataverse Owner
+  Teams for row-level security. Advantages: minimal infrastructure change,
+  no need to restructure record ownership. Limitation: a TM with direct API
+  access (e.g., Power Automate) could technically read registrations outside
+  their territories.
+
+  Phase 2 upgrade path: Implement Owner Teams per Territory. Each
+  cpor_RegulatoryRegistration record's ownerid is set to the territory's
+  owner team. TM is a member of their territory's team. Switch TM role
+  Write privilege from Global to Business Unit scope.
+
+APP ACCESS:
+  Add the CPOR Territory Manager role to the CPOR Industry Catalog app
+  in the App Designer > Manage Roles dialog. The TM then sees the app
+  in their list of available apps.
+
+SITE MAP ADDITION — "My Territory" Area:
+  In the App Designer, add a new Area to the CPOR Industry Catalog site map:
+    Area:   My Territory
+    Group:  Territory Health
+    Pages:
+      - TM Health (Web Resource: cpor/html/cpor_tm_health.html)
+        [type: Web Resource — see Guide 09]
+      - Registrations (Table: cpor_RegulatoryRegistration)
+        Default view: set to the "Pending My Approval" view
+        (defined in Guide 08 View addendum)
+
+  VIEW ADDENDUM — Pending My Approval:
+    Entity:  cpor_RegulatoryRegistration
+    Filter:  cpor_registrationstatus eq 154080003 (Pending TM Review)
+             NOTE: Row filtering to current user's territories is enforced
+             by the TM Health webresource. This MDA view shows all
+             Pending TM Review records. For the scoped view, TM uses the
+             webresource page (Guide 09).
+    Columns: cpor_name, Territory, Risk Rating, Mandatory,
+             cpor_stage4submitteddate, cpor_lastverifieddate
+    Sort:    cpor_stage4submitteddate ASC (oldest pending first)
+    Default: YES (for the My Territory > Registrations page)
+
+  VIEW ADDENDUM — Approved by Me:
+    Entity:  cpor_RegulatoryRegistration
+    Filter:  cpor_registrationstatus eq 154080000 (Active)
+             AND cpor_approvedby eq [current user]
+    Columns: cpor_name, Territory, Domain, cpor_approveddate,
+             cpor_lastverifieddate, cpor_riskrating
+    Sort:    cpor_approveddate DESC
+    Default: NO
+
+PORTAL STEPS:
+  1. In make.powerapps.com, open the CPOR solution.
+  2. Navigate to Settings > Advanced Settings > Security > Security Roles.
+  3. Create New. Name: CPOR Territory Manager.
+  4. Configure privileges per table above.
+  5. Save role.
+  6. Create Field Security Profile (see above steps).
+  7. Add role to CPOR Industry Catalog app (App Designer > Manage Roles).
+  8. Add site map area (App Designer > Navigation).
+
+--------------------------------------------------------------------------------
+GUIDE 09 (NEW): TM Territory Health Webresource
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  A territory-scoped catalog health monitoring page — the TM's primary
+  app surface. Architecturally parallel to cpor_catalog_health.html but
+  scoped to the current user's managed territories rather than the full org.
+
+FILES:
+  webresources/html/cpor_tm_health.html
+  webresources/js/cpor_tm_health.js
+  (reuses cpor_components.js, cpor_xrm_client.js, cpor_styles.css)
+
+PREREQUISITE:
+  Guide 11 (cpor_xrm_client.js enhancements) deployed —
+  getCurrentUserId() and getManagedTerritoryIds() must be available.
+  Guide 08 (TM Security Role) deployed —
+  TM must have app access before this page is useful.
+
+PAGE LOAD SEQUENCE:
+  1. Splash / loading state
+  2. getCurrentUserId() -> userId
+  3. getManagedTerritoryIds(userId) -> territoryIds[]
+  4. If territoryIds is empty: show "You have no territories assigned.
+     Contact your administrator to be assigned as Territory Manager."
+     Halt.
+  5. Parallel queries (all filtered to territoryIds):
+     Q1: Active registrations count (cpor_registrationstatus eq 154080000)
+     Q2: Stale registrations count (status Active AND lastverifieddate < -180d)
+     Q3: Pending My Approval count (cpor_registrationstatus eq 154080003)
+     Q4: Critical count (status Active AND ismandatory eq true
+                         AND compliancedeadline lt today+90)
+  6. Render KPI row
+  7. Render per-territory breakdown table
+  8. Render tabs (Pending My Approval, Approaching Deadlines, Stale)
+  9. Render command bar
+
+KPI ROW TILES (using CporComponents.renderKPICard):
+  Tile 1: My Territories         — count of territories TM manages
+  Tile 2: Active Registrations   — Q1 count
+  Tile 3: Pending My Approval    — Q3 count (highlighted amber if > 0)
+  Tile 4: Critical Obligations   — Q4 count (highlighted red if > 0)
+
+PER-TERRITORY BREAKDOWN TABLE:
+  Columns: Territory Name | Active | Stale | Pending Approval | Next Deadline
+  Each row clickable → opens filtered Registration Manager URL:
+    cpor_registration_manager.html?filter=vertical-{territory}
+    (or use territory filter param if supported)
+  Sort: Territory Name ASC
+
+TABS:
+
+  Tab 1: Pending My Approval
+    Query: cpor_registrationstatus eq 154080003
+           AND [territory filter for TM's territories]
+    Columns:
+      - Name (cpor_name) — link opens record form
+      - Territory
+      - Risk Rating (riskBadge)
+      - Mandatory (boolIcon)
+      - Submitted (cpor_stage4submitteddate, formatted date)
+      - Days Pending (calculated: today minus cpor_stage4submitteddate;
+                      use deadlineChip logic but inverted — older = more urgent)
+    Sort: cpor_stage4submitteddate ASC
+    Command bar: "Open Approval Email" (deep link to Power Automate Approvals)
+
+  Tab 2: Approaching Deadlines (My Territories)
+    Query: cpor_registrationstatus eq 154080000 (Active)
+           AND cpor_ismandatory eq true
+           AND cpor_compliancedeadline ge [today]
+           AND cpor_compliancedeadline le [today + 90 days]
+           AND [territory filter]
+    Columns:
+      - Name, Territory, Domain, Deadline (deadlineChip), Risk (riskBadge), Mandatory
+    Sort: cpor_compliancedeadline ASC
+    Command bar: "Generate AE Report" (see below)
+
+  Tab 3: Stale in My Territories
+    Query: cpor_registrationstatus eq 154080000 (Active)
+           AND cpor_lastverifieddate lt [today minus 180 days]
+           AND [territory filter]
+    Columns:
+      - Name, Territory, Domain, Last Verified (formatted relative),
+        Risk (riskBadge), Mandatory
+    Inline edit on cpor_lastverifieddate (reuse startInlineEdit pattern
+    from cpor_registration_manager.js)
+    Sort: cpor_lastverifieddate ASC
+
+COMMAND BAR:
+  - Refresh
+  - "Generate AE Report" button (present in Tab 2 and in main command bar)
+    On click: HTTP POST to Flow 5 instant trigger URL
+              Show toast "AE Report generation triggered. Tasks will be
+              created in D365 Sales within 2-3 minutes."
+    Implementation: Use odataFetch() from cpor_xrm_client.js to POST to
+    a Power Automate HTTP-triggered instant flow URL (stored as a Compose
+    constant in cpor_tm_health.js, set at deployment time).
+
+SECURITY NOTE:
+  The webresource queries include the territory filter (TM's territory IDs)
+  built via buildTerritoryFilter(). A user who is NOT in the TM role but
+  somehow accesses the page will receive their own getManagedTerritoryIds()
+  result — if they manage no territories, the empty-state message is shown
+  and no data is exposed.
+
+PORTAL STEPS:
+  1. Upload cpor_tm_health.html as Web Resource:
+       Unique Name: cpor/html/cpor_tm_health.html
+       Display Name: CPOR TM Territory Health
+       Type: Webpage (HTML)
+  2. Upload cpor_tm_health.js as Web Resource:
+       Unique Name: cpor/js/cpor_tm_health.js
+       Display Name: CPOR TM Territory Health Script
+       Type: JScript
+  3. Add the HTML web resource to the CPOR solution.
+  4. Reference cpor_tm_health.js from within cpor_tm_health.html.
+  5. Configure the site map page (see Guide 08 site map steps) to point to
+     cpor/html/cpor_tm_health.html.
+
+--------------------------------------------------------------------------------
+GUIDE 10 (NEW): Flow 5 — Territory Compliance Health Report to AE
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  Weekly automated flow that creates Task records on Accounts in D365 Sales,
+  surfacing compliance risk signals to Account Executives without requiring
+  AEs to access the CPOR Industry Catalog app.
+
+FLOW NAME:    CPOR — Territory Compliance Health Report to AE
+TRIGGER TYPE: Recurrence (Scheduled)
+
+TRIGGER:
+  Frequency:  Week
+  Interval:   1
+  Days:       Monday
+  Start time: 11:00 UTC
+  (Offset +2 hours from Flow 1 at 09:00 UTC. Flow 1 stale processing
+   completes before this flow queries active/stale data.)
+
+ALSO TRIGGERABLE ON-DEMAND:
+  Add an HTTP request trigger (Instant cloud flow trigger) in a separate
+  instant flow. The TM Health webresource "Generate AE Report" button
+  POSTs to this trigger URL. The instant flow calls the same logic as the
+  scheduled flow, scoped to the requesting TM's territories.
+
+STEP 1: Get all Territory Managers
+  Action: List rows (Dataverse connector)
+    Table Name:   territories
+    Filter rows:  _managerid_value ne null
+                  AND cpor_territorycode ne null
+    Select columns: territoryid,name,_managerid_value
+  Store as varTerritoryList.
+
+STEP 2: Apply to each territory
+  Input: varTerritoryList
+
+  STEP 2a: Get compliance-relevant registrations for this territory
+  Action: List rows (Dataverse connector)
+    Table Name:   cpor_regulatoryregistrations
+    Filter rows:
+      _cpor_territory_value eq @{items('Apply_to_each')['territoryid']}
+      AND cpor_registrationstatus eq 154080000
+      AND (
+        (cpor_ismandatory eq true AND cpor_compliancedeadline le
+          @{addDays(utcNow(), 90)})
+        OR (cpor_riskrating eq 154080000 AND cpor_lastverifieddate le
+          @{addDays(utcNow(), -90)})
+        OR (cpor_registrationstatus eq 154080000 AND createdon ge
+          @{addDays(utcNow(), -7)})
+      )
+    Select columns: cpor_regulatoryregistrationid,cpor_name,cpor_legislationname,
+                    cpor_riskrating,cpor_ismandatory,cpor_compliancedeadline,
+                    cpor_lastverifieddate,_cpor_compliancedomain_value
+    Order by: cpor_compliancedeadline asc
+
+  STEP 2b: Check if any relevant registrations exist
+  Action: Condition
+    length(outputs('List_registrations')?['body/value']) Greater than 0
+  False branch: Terminate (Succeeded) — no action needed for this territory.
+
+  STEP 2c (True): Get Accounts assigned to this territory
+  Action: List rows (Dataverse connector)
+    Table Name: accounts
+    Filter rows: _territoryid_value eq @{items('Apply_to_each')['territoryid']}
+    Select columns: accountid,name,_ownerid_value,owneridname
+
+  STEP 2d (True): Check if any accounts exist
+  Action: Condition
+    length(outputs('List_accounts')?['body/value']) Greater than 0
+  False: Terminate (Succeeded) — territory has no accounts.
+
+  STEP 2e (True): Apply to each account
+    Input: accounts from Step 2c
+
+    STEP 2e-i: Build compliance summary for this account
+    Action: Compose — varComplianceSummary
+      Content:
+        CPOR Compliance Health — @{items('Apply_to_each_account')['name']}
+        Territory: @{items('Apply_to_each')['name']}
+        Report Date: @{utcNow('yyyy-MM-dd')}
+
+        The following compliance obligations require your awareness:
+
+        @{join(
+          map(
+            outputs('List_registrations')?['body/value'],
+            item => concat(
+              '• ', item['cpor_name'],
+              ' | Risk: ', item['cpor_riskrating'],
+              if(item['cpor_ismandatory'], ' | MANDATORY', ''),
+              if(not(equals(item['cpor_compliancedeadline'], null)),
+                concat(' | Deadline: ', item['cpor_compliancedeadline']),
+                '')
+            )
+          ),
+          decodeUriComponent('%0A')
+        )}
+
+        Review with your account team to confirm applicability.
+        Open the CPOR Industry Catalog for full registration details.
+
+    STEP 2e-ii: Create Task on Account
+    Action: Create a new row (Dataverse connector)
+      Table Name: tasks
+      Row values:
+        subject:                CPOR Compliance Health — @{items('Apply_to_each')['name']}
+                                @{utcNow('yyyy-MM-dd')}
+        description:            @{outputs('varComplianceSummary')}
+        regardingobjectid_account@odata.bind:
+          /accounts(@{items('Apply_to_each_account')['accountid']})
+        ownerid@odata.bind:
+          /systemusers(@{items('Apply_to_each_account')['_ownerid_value']})
+        scheduledend:           @{addDays(utcNow(), 7)}
+        category:               CPOR Compliance
+        prioritycode:           2 (High)
+
+  STEP 2f (True): Notify TM of report completion
+  Action: Send an email (V2) or Teams notification
+    To:      @{outputs('Get_Territory_Manager_Email')} (resolved from managerid)
+    Subject: CPOR AE Report Generated — @{items('Apply_to_each')['name']}
+    Body:    Compliance health tasks have been created for
+             @{length(outputs('List_accounts')?['body/value'])} accounts
+             in territory @{items('Apply_to_each')['name']}.
+             @{length(outputs('List_registrations')?['body/value'])} compliance
+             obligations were included. Tasks are due in 7 days.
+
+VERIFICATION:
+  1. Assign a test territory with managerid = test TM user.
+  2. Assign a test account with territoryid = that territory,
+     ownerid = test AE user.
+  3. Ensure at least one Active registration in that territory with
+     cpor_ismandatory = true AND cpor_compliancedeadline within 90 days.
+  4. Run the flow manually (Test > Manually trigger).
+  5. Confirm flow completes (green checkmarks).
+  6. Open the test Account in D365 Sales. Confirm a Task appears in the
+     Activity timeline with:
+       - Subject containing the territory name and today's date
+       - Owner = test AE user
+       - Due date = today + 7 days
+       - Description containing the registration name
+  7. Confirm TM received the completion notification.
+
+--------------------------------------------------------------------------------
+GUIDE 11 (UPDATE): cpor_xrm_client.js — TM Identity and Territory Utilities
+--------------------------------------------------------------------------------
+
+PURPOSE:
+  Add four new utility functions to cpor_xrm_client.js enabling TM-scoped
+  data access. These functions are required by Guide 09 (TM Health webresource)
+  and available to any future TM-aware page.
+
+PREREQUISITE: Existing cpor_xrm_client.js deployed and functioning.
+
+NEW FUNCTIONS TO ADD:
+
+FUNCTION 1: getCurrentUserId()
+  Purpose: Returns the Dataverse systemuserid of the currently logged-in user.
+           Used as the anchor for all TM scoping queries.
+  Implementation:
+    getCurrentUserId() {
+        try {
+            const raw = Xrm.Utility.getGlobalContext().getUserId();
+            // Dataverse returns GUIDs wrapped in curly braces: {guid}
+            return raw ? raw.replace(/[{}]/g, '').toLowerCase() : null;
+        } catch (e) {
+            console.error('[CporXrm] getCurrentUserId error:', e);
+            return null;
+        }
+    }
+  Note: Xrm.Utility.getGlobalContext() is available in both full page
+  context and iframe context. If called outside an MDA context (e.g., in
+  a standalone test), it will throw — the try/catch handles this.
+
+FUNCTION 2: getManagedTerritoryIds()
+  Purpose: Returns a Promise resolving to an array of territory GUIDs where
+           the current user is the territory manager.
+  Implementation:
+    async getManagedTerritoryIds() {
+        const userId = this.getCurrentUserId();
+        if (!userId) return [];
+        try {
+            const result = await this.fetchRecords(
+                'territories',
+                `?$filter=_managerid_value eq ${userId} and cpor_territorycode ne null` +
+                `&$select=territoryid,name` +
+                `&$top=200`
+            );
+            return (result.records || []).map(t => t.territoryid);
+        } catch (e) {
+            console.error('[CporXrm] getManagedTerritoryIds error:', e);
+            return [];
+        }
+    }
+  Note: Filter includes cpor_territorycode ne null to exclude OOB sales
+  routing territories. Cap at 200 — a TM managing more than 200 territories
+  is an edge case that warrants a separate discussion.
+
+FUNCTION 3: isTerritoryManager()
+  Purpose: Returns a Promise resolving to boolean — true if the current
+           user manages at least one CPOR territory.
+  Implementation:
+    async isTerritoryManager() {
+        const ids = await this.getManagedTerritoryIds();
+        return ids.length > 0;
+    }
+
+FUNCTION 4: buildTerritoryFilter(territoryIds)
+  Purpose: Builds an OData filter expression scoping a query to the provided
+           list of territory GUIDs via the cpor_territory lookup field.
+  Implementation:
+    buildTerritoryFilter(territoryIds) {
+        if (!territoryIds || territoryIds.length === 0) {
+            // Return a filter that matches nothing — safety guard
+            return '_cpor_territory_value eq null';
+        }
+        if (territoryIds.length === 1) {
+            return `_cpor_territory_value eq ${territoryIds[0]}`;
+        }
+        return territoryIds
+            .map(id => `_cpor_territory_value eq ${id}`)
+            .join(' or ');
+    }
+  IMPORTANT: Dataverse Web API OData does NOT support the $in operator
+  on lookup fields. An explicit OR chain is required. Tested pattern:
+    _cpor_territory_value eq 'id1' or _cpor_territory_value eq 'id2'
+  For large territory sets (>20), wrap in parentheses and consider
+  splitting into multiple queries to avoid OData filter length limits.
+
+PORTAL STEPS:
+  1. In make.powerapps.com, open the CPOR solution.
+  2. Navigate to Objects > Web Resources.
+  3. Open cpor_xrm_client.js for editing.
+  4. Add the four functions above within the CporXrm object/namespace,
+     after the existing getContext() function.
+  5. Save and publish the web resource.
+  6. Verify: in a test MDA form's browser console:
+       CporXrm.getCurrentUserId()  // should return a lowercase GUID
+       await CporXrm.getManagedTerritoryIds()  // should return array
+       CporXrm.buildTerritoryFilter(['id1','id2'])
+       // should return: _cpor_territory_value eq id1 or _cpor_territory_value eq id2
+
+
+================================================================================
+SECTION 6: VERIFICATION CHECKLIST
+================================================================================
+
+PRE-IMPLEMENTATION (run in Dataverse before coding):
+
+  [ ] 1. Confirm deployed field names on cpor_RegulatoryRegistration:
+         GET /EntityDefinitions(LogicalName='cpor_regulatoryregistration')
+             /Attributes?$filter=startswith(LogicalName,'cpor')
+             &$select=LogicalName,DisplayName,AttributeType
+         Verify: cpor_approvedby, cpor_approveddate in results.
+         Verify: cpor_registrationstatus, cpor_riskrating, cpor_lastverifieddate
+                 all present.
+
+  [ ] 2. Confirm territory.managerid is OOB Lookup:
+         GET /EntityDefinitions(LogicalName='territory')
+             /Attributes?$select=LogicalName,DisplayName,AttributeType
+         Verify: managerid appears as Lookup -> systemuser.
+
+  [ ] 3. Confirm cpor_stage4submitteddate does NOT yet exist
+         (so creation step in Guide 12 is not skipped).
+
+  [ ] 4. Count deployed cpor_ fields vs. fields referenced in JS:
+         Identify any fields queried in JS that do not appear in the
+         EntityDefinitions API result. These are undeployed fields that
+         will cause silent OData errors (missing fields return null, not errors,
+         in $select — but they will affect query results).
+
+POST-GUIDE-12 (Schema Reconciliation):
+  [ ] 5. Open CRM Guide 06 and Guide 07 and confirm all cpor_verifiedby
+         references have been updated to cpor_approvedby.
+  [ ] 6. Open CRM Guide 07 PREREQUISITE section and confirm "cpor_approvaldate
+         NOT YET deployed" warning has been removed.
+  [ ] 7. Create cpor_stage4submitteddate field in the CPOR solution.
+
+POST-GUIDE-08 (TM Role):
+  [ ] 8. Assign test user to CPOR Territory Manager role.
+  [ ] 9. Assign CPOR TM Write Fields profile to test user.
+  [ ] 10. Confirm test user can access CPOR Industry Catalog app.
+  [ ] 11. Confirm test user cannot write to cpor_riskrating on a registration.
+  [ ] 12. Confirm test user CAN write to cpor_approvedby on a registration.
+
+POST-GUIDE-11 (cpor_xrm_client.js):
+  [ ] 13. In browser console inside MDA:
+          CporXrm.getCurrentUserId() returns a valid lowercase GUID.
+  [ ] 14. Assign test TM user as managerid on 2 test territory records.
+  [ ] 15. Log in as test TM user. CporXrm.getManagedTerritoryIds() returns
+          those 2 territory GUIDs.
+  [ ] 16. buildTerritoryFilter(['id1','id2']) returns correct OR filter string.
+
+POST-GUIDE-09 (TM Health Webresource):
+  [ ] 17. TM Health page loads without errors.
+  [ ] 18. KPI tiles show counts scoped to TM's territories only.
+  [ ] 19. "Pending My Approval" tab shows only Stage 4 registrations
+          in TM's territories.
+  [ ] 20. A user WITHOUT TM role sees empty-state message, no data.
+
+POST-GUIDE-10 (Flow 5):
+  [ ] 21. Run Flow 5 manually against test data.
+  [ ] 22. Confirm Task created on test Account with:
+          - Subject contains territory name and today's date
+          - Owner = AE (account.ownerid), not TM
+          - Due date = today + 7 days
+          - Category = CPOR Compliance
+  [ ] 23. Confirm TM receives completion notification.
+  [ ] 24. Confirm no Task is created when a territory has no qualifying
+          registrations (Flow 2b False branch exit works).
+
+
+================================================================================
+SECTION 7: ARCHITECTURAL DECISIONS LOG
+================================================================================
+
+DECISION 1: Soft-scope (view-level) vs. Owner Teams for TM row security
+  Chosen: Soft-scope (Phase 1)
+  Rationale: Owner Teams require restructuring record ownership (all existing
+  registrations owned by analysts). Soft-scope achieves the UX goal with
+  minimal infrastructure change. Row-level security is not the primary
+  concern for Phase 1 — the TM has read access to the full catalog via their
+  role, and the view filtering provides the operational scoping they need.
+  Phase 2 path: Implement Owner Teams per Territory.
+
+DECISION 2: Task entity (OOB) vs. new cpor_ComplianceAlert entity for AE signal
+  Chosen: Task entity (OOB)
+  Rationale: Tasks appear natively in the Account Activity timeline and AE's
+  My Activities view with no configuration. AEs work in D365 Sales — they
+  already use Tasks. A new entity would require form additions to the Sales app,
+  additional security role changes, and change management for AEs.
+
+DECISION 3: cpor_CatalogHealthSnapshot entity for trend tracking
+  Chosen: Deferred to Phase 2
+  Rationale: Point-in-time flow run history and cpor_approveddate timestamps
+  provide sufficient initial signal. Historical trend analysis (QBR trend charts)
+  requires the entity. Defer to avoid scope creep in Phase 1.
+
+DECISION 4: Flow 5 cadence
+  Chosen: Weekly (Monday 11:00 UTC) + on-demand HTTP trigger
+  Rationale: Weekly aligns with the established operational cadence (Flow 1
+  also runs Monday morning). On-demand allows TM to generate reports when a
+  critical regulation is activated outside the weekly cycle.
+
+DECISION 5: Trust schema file for cpor_approvedby / cpor_approveddate
+  Chosen: Schema file is authoritative
+  Rationale: Dataverse does not allow renaming a field's logical name after
+  creation. If the schema file shows cpor_approvedby, that IS the deployed
+  logical name. Guide 07's claim that cpor_verifiedby is deployed is incorrect.
+  Verify with EntityDefinitions API before implementing Guide 12 corrections.
+
+DECISION 6: cpor_stage4submitteddate — create vs. use existing date field
+  Chosen: Create as new field
+  Rationale: No existing date field on cpor_RegulatoryRegistration captures
+  the moment of Stage 4 submission specifically. cpor_lastverifieddate captures
+  the last analyst verification date, not the approval submission date.
+  The SLA tracking requirement (7-day target from submission to TM approval)
+  requires a distinct timestamp.
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================

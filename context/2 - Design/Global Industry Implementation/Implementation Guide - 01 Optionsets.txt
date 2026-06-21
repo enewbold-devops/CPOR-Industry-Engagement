@@ -202,7 +202,7 @@ NOTE: The deprecated cpor_status text field (Active/Superseded/Pending string va
   bulk update in the POST-DEPLOYMENT STEPS below before removing it.
 
 ================================================================================
-OPTIONSET 9 \u2014 cpor_intakesource
+OPTIONSET 9: cpor_intakesource
 ================================================================================
 
 PURPOSE
@@ -218,7 +218,7 @@ Used on:      cpor_RegulatoryRegistration.cpor_intakesource
 VALUES
 ------
   Display Name          Integer     Notes
-  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
   Regulatory Alert      154080000   Proactive regulatory monitoring by analyst
   Seller Request        154080001   Request originated from a seller in the field
   Annual Review         154080002   Scheduled annual catalog refresh cycle

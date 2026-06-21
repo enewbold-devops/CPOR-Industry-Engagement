@@ -329,7 +329,7 @@ var CporNewRegistrationDialog = (function () {
         _crosswalkData = null;
         _crosswalkForIndustry = d.cpor_industrycode;
         CporXrm.fetchRecords('cpor_industrydomainmaps',
-            '$filter=' + encodeURIComponent('_cpor_industrycodeid_value eq ' + d.cpor_industrycode) +
+            '$filter=' + encodeURIComponent('_cpor_industrycode_value eq ' + d.cpor_industrycode) +
             '&$expand=cpor_ComplianceDomain($select=cpor_compliancedomainid,cpor_name)' +
             '&$select=cpor_implementationpriority,cpor_industrydomainmapid&$top=50')
             .then(function (result) {
