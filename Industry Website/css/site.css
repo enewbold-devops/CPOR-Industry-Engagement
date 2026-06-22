@@ -88,7 +88,7 @@ img { max-width: 100%; display: block; }
 }
 .site-nav .container { display: flex; align-items: center; gap: 28px; height: 64px; }
 .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.brand img { height: 22px; width: auto; }
+.brand img { height: 60px; width: auto; }
 .brand .brand-sep { width: 1px; height: 22px; background: var(--line); }
 .brand .brand-name { font-weight: 600; font-size: .98rem; color: var(--ink); white-space: nowrap; }
 
@@ -285,7 +285,7 @@ section { padding: 72px 0; }
 .footer-cols ul { list-style: none; padding: 0; margin: 0; }
 .footer-cols li { margin-bottom: 10px; }
 .footer-cols a { color: var(--gray-2); font-size: .88rem; }
-.footer-brand img { height: 21px; margin-bottom: 14px; }
+.footer-brand img { height: 60px; margin-bottom: 14px; }
 .footer-brand p { font-size: .86rem; color: var(--gray-2); max-width: 280px; }
 .footer-bottom { border-top: 1px solid var(--line); margin-top: 36px; padding-top: 20px;
   display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; color: var(--gray-2); font-size: .8rem; }
