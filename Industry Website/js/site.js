@@ -47,18 +47,35 @@
         var src = v.getAttribute("data-video");
         var title = v.getAttribute("data-title") || "Demo";
         if (src) {
-          // When a real video URL is provided, swap in a player.
-          var frame = document.createElement("video");
-          frame.src = src;
-          frame.controls = true;
-          frame.autoplay = true;
-          frame.style.position = "absolute";
-          frame.style.inset = "0";
-          frame.style.width = "100%";
-          frame.style.height = "100%";
-          frame.style.objectFit = "cover";
-          v.innerHTML = "";
-          v.appendChild(frame);
+          // Detect YouTube watch URLs and swap in a no-controls iframe player.
+          var ytMatch = src.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?]+)/);
+          if (ytMatch) {
+            var frame = document.createElement("iframe");
+            frame.src = "https://www.youtube.com/embed/" + ytMatch[1] + "?autoplay=1&controls=0&rel=0";
+            frame.allow = "autoplay; fullscreen";
+            frame.allowFullscreen = true;
+            frame.setAttribute("allowfullscreen", "");
+            frame.style.position = "absolute";
+            frame.style.inset = "0";
+            frame.style.width = "100%";
+            frame.style.height = "100%";
+            frame.style.border = "none";
+            v.innerHTML = "";
+            v.appendChild(frame);
+          } else {
+            // Native video fallback for direct file URLs.
+            var videoEl = document.createElement("video");
+            videoEl.src = src;
+            videoEl.controls = true;
+            videoEl.autoplay = true;
+            videoEl.style.position = "absolute";
+            videoEl.style.inset = "0";
+            videoEl.style.width = "100%";
+            videoEl.style.height = "100%";
+            videoEl.style.objectFit = "cover";
+            v.innerHTML = "";
+            v.appendChild(videoEl);
+          }
         } else {
           v.classList.add("pending");
           showToast("Demo video \u201C" + title + "\u201D will be available here.");
